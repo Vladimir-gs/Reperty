@@ -1,14 +1,16 @@
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../core/theme/app_theme.dart';
 import '../../../shared/widgets/common_widgets.dart';
 import '../../auth/data/auth_repository.dart';
 import '../../groups/data/groups_repository.dart';
 import '../../setlists/data/setlists_repository.dart';
 import '../../songs/data/songs_repository.dart';
 
-/// Home: saludo, grupo seleccionado, próximo setlist, conteos.
+/// Inicio: saludo grande, grupo actual, próximo setlist y conteos.
 class HomeScreen extends ConsumerWidget {
   const HomeScreen({super.key});
 
@@ -19,98 +21,129 @@ class HomeScreen extends ConsumerWidget {
     final myGroups = ref.watch(myGroupsProvider);
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Reperty'),
-        actions: [
-          IconButton(
-            tooltip: 'Cambiar grupo',
-            onPressed: () => _showSwitchGroup(context, ref),
-            icon: const Icon(Icons.swap_horiz),
-          ),
-        ],
-      ),
-      body: ListView(
-        padding: const EdgeInsets.all(16),
-        children: [
-          profile.when(
-            loading: () => const LoadingView(),
-            error: (e, _) => Text('Error: $e'),
-            data: (user) => Text(
-              user == null ? 'Hola' : 'Hola, ${user.name}',
-              style: Theme.of(context).textTheme.headlineMedium,
-            ),
-          ),
-          const SizedBox(height: 4),
-          myGroups.when(
-            loading: () => const Text('Cargando grupos...'),
-            error: (e, _) => Text('Error: $e'),
-            data: (list) {
-              if (list.isEmpty) {
-                return EmptyState(
-                  title: 'Crea o únete a un grupo para empezar.',
-                  action: FilledButton(
-                    onPressed: () => context.go('/groups'),
-                    child: const Text('Ir a grupos'),
-                  ),
-                );
-              }
-              final current = group ?? list.first;
-              return Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+      body: SafeArea(
+        child: ListView(
+          padding: const EdgeInsets.all(AppTheme.screenPadding),
+          children: [
+            profile.when(
+              loading: () => const LoadingView(),
+              error: (e, _) => Text('Error: $e'),
+              data: (user) => Row(
                 children: [
-                  Text(
-                    current.name,
-                    style: Theme.of(context).textTheme.titleLarge,
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          _greeting(),
+                          style:
+                              Theme.of(context).textTheme.bodyLarge?.copyWith(
+                                    color: AppTheme.iosGrey,
+                                  ),
+                        ),
+                        Text(
+                          user == null
+                              ? 'Hola'
+                              : firstName(user.name),
+                          style: Theme.of(context).textTheme.displayLarge,
+                        ),
+                      ],
+                    ),
                   ),
-                  Text('Código: ${current.code}'),
-                  const SizedBox(height: 16),
-                  _NextSetlistCard(groupId: current.id),
-                  const SizedBox(height: 16),
-                  _CountsRow(groupId: current.id),
-                  const SizedBox(height: 16),
-                  FilledButton(
-                    onPressed: () => context.go('/setlists'),
-                    child: const Text('Ver setlists'),
+                  CupertinoButton(
+                    padding: EdgeInsets.zero,
+                    onPressed: () => _showSwitchGroup(context, ref),
+                    child: const Icon(CupertinoIcons.arrow_2_circlepath),
                   ),
                 ],
-              );
-            },
-          ),
-        ],
+              ),
+            ),
+            const SizedBox(height: 8),
+            myGroups.when(
+              loading: () => const LoadingView(message: 'Cargando grupos…'),
+              error: (e, _) => Text('Error: $e'),
+              data: (list) {
+                if (list.isEmpty) {
+                  return EmptyState(
+                    icon: CupertinoIcons.group,
+                    title:
+                        'Aún no tienes grupo.\nCrea uno o únete con un código.',
+                    action: PrimaryButton(
+                      label: 'Ir a grupos',
+                      onPressed: () => context.go('/groups'),
+                    ),
+                  );
+                }
+                final current = group ?? list.first;
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      current.name,
+                      style: Theme.of(context).textTheme.titleLarge,
+                    ),
+                    Text(
+                      'Código ${current.code}',
+                      style: Theme.of(context).textTheme.bodySmall,
+                    ),
+                    const SectionTitle(title: 'Próximo setlist'),
+                    _NextSetlist(groupId: current.id),
+                    const SectionTitle(title: 'Resumen'),
+                    _CountsRow(groupId: current.id),
+                    const SizedBox(height: 28),
+                    PrimaryButton(
+                      label: 'Ver setlists',
+                      onPressed: () => context.go('/setlists'),
+                    ),
+                  ],
+                );
+              },
+            ),
+          ],
+        ),
       ),
     );
   }
 
+  String _greeting() {
+    final h = DateTime.now().hour;
+    if (h < 12) return 'Buenos días';
+    if (h < 19) return 'Buenas tardes';
+    return 'Buenas noches';
+  }
+
+  String firstName(String name) {
+    final parts = name.trim().split(RegExp(r'\s+'));
+    return parts.isEmpty ? 'Hola' : parts.first;
+  }
+
   void _showSwitchGroup(BuildContext context, WidgetRef ref) {
     final groups = ref.read(myGroupsProvider).valueOrNull ?? [];
-    showDialog<void>(
+    showCupertinoModalPopup<void>(
       context: context,
-      builder: (ctx) => SimpleDialog(
+      builder: (ctx) => CupertinoActionSheet(
         title: const Text('Cambiar de grupo'),
-        children: [
+        actions: [
           for (final g in groups)
-            SimpleDialogOption(
+            CupertinoActionSheetAction(
               onPressed: () {
                 ref.read(selectedGroupProvider.notifier).state = g;
                 Navigator.pop(ctx);
               },
               child: Text(g.name),
             ),
-          SimpleDialogOption(
-            onPressed: () {
-              Navigator.pop(ctx);
-              ctx.push('/groups');
-            },
-            child: const Text('Administrar grupos...'),
-          ),
         ],
+        cancelButton: CupertinoActionSheetAction(
+          onPressed: () => Navigator.pop(ctx),
+          child: const Text('Cancelar'),
+        ),
       ),
     );
   }
 }
 
-class _NextSetlistCard extends ConsumerWidget {
-  const _NextSetlistCard({required this.groupId});
+class _NextSetlist extends ConsumerWidget {
+  const _NextSetlist({required this.groupId});
 
   final String groupId;
 
@@ -118,29 +151,53 @@ class _NextSetlistCard extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final setlists = ref.watch(setlistsProvider(groupId));
     return setlists.when(
-      loading: () => const Card(child: LoadingView()),
-      error: (e, _) => Card(child: ListTile(title: Text('Error: $e'))),
+      loading: () => Container(
+        padding: const EdgeInsets.all(24),
+        decoration: BoxDecoration(
+          color: Theme.of(context).cardColor,
+          borderRadius: BorderRadius.circular(AppTheme.cardRadius),
+        ),
+        child: const LoadingView(),
+      ),
+      error: (e, _) => Text('Error: $e'),
       data: (list) {
         if (list.isEmpty) {
-          return const Card(
-            child: ListTile(
-              title: Text('Próximo setlist'),
-              subtitle: Text('Aún no hay setlists.'),
+          return Container(
+            padding: const EdgeInsets.all(24),
+            decoration: BoxDecoration(
+              color: Theme.of(context).cardColor,
+              borderRadius: BorderRadius.circular(AppTheme.cardRadius),
+            ),
+            child: const EmptyState(
+              icon: CupertinoIcons.list_bullet,
+              title: 'Aún no hay setlists.',
             ),
           );
         }
         final next = list.first;
-        return Card(
-          child: ListTile(
-            title: Text('Próximo: ${next.name}'),
-            subtitle: Text(
-              next.date != null
+        return GroupedSection(
+          children: [
+            AppleRow(
+              leading: Container(
+                width: 44,
+                height: 44,
+                decoration: BoxDecoration(
+                  color: AppTheme.iosBlue.withAlpha(22),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: const Icon(
+                  CupertinoIcons.music_note_list,
+                  color: AppTheme.iosBlue,
+                ),
+              ),
+              title: next.name,
+              subtitle: next.date != null
                   ? '${next.date!.day}/${next.date!.month}/${next.date!.year}'
-                  : next.description,
+                  : (next.description.isEmpty ? 'Sin fecha' : next.description),
+              showChevron: true,
+              onTap: () => context.go('/setlists/${next.id}'),
             ),
-            trailing: const Icon(Icons.chevron_right),
-            onTap: () => context.go('/setlists/${next.id}'),
-          ),
+          ],
         );
       },
     );
@@ -159,39 +216,60 @@ class _CountsRow extends ConsumerWidget {
     return Row(
       children: [
         Expanded(
-          child: Card(
-            child: Padding(
-              padding: const EdgeInsets.all(16),
-              child: Column(
-                children: [
-                  Text(
-                    songs.valueOrNull?.length.toString() ?? '—',
-                    style: Theme.of(context).textTheme.headlineMedium,
-                  ),
-                  const Text('Canciones'),
-                ],
-              ),
-            ),
+          child: _StatCard(
+            value: songs.valueOrNull?.length.toString() ?? '—',
+            label: 'Cantos',
+            icon: CupertinoIcons.music_note,
           ),
         ),
-        const SizedBox(width: 8),
+        const SizedBox(width: 12),
         Expanded(
-          child: Card(
-            child: Padding(
-              padding: const EdgeInsets.all(16),
-              child: Column(
-                children: [
-                  Text(
-                    members.valueOrNull?.length.toString() ?? '—',
-                    style: Theme.of(context).textTheme.headlineMedium,
-                  ),
-                  const Text('Miembros'),
-                ],
-              ),
-            ),
+          child: _StatCard(
+            value: members.valueOrNull?.length.toString() ?? '—',
+            label: 'Miembros',
+            icon: CupertinoIcons.group,
           ),
         ),
       ],
+    );
+  }
+}
+
+class _StatCard extends StatelessWidget {
+  const _StatCard({
+    required this.value,
+    required this.label,
+    required this.icon,
+  });
+
+  final String value;
+  final String label;
+  final IconData icon;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 24, horizontal: 16),
+      decoration: BoxDecoration(
+        color: Theme.of(context).cardColor,
+        borderRadius: BorderRadius.circular(AppTheme.cardRadius),
+      ),
+      child: Column(
+        children: [
+          Icon(icon, size: 28, color: AppTheme.iosBlue),
+          const SizedBox(height: 8),
+          Text(
+            value,
+            style: Theme.of(context).textTheme.displayLarge?.copyWith(
+                  fontSize: 30,
+                ),
+          ),
+          Text(
+            label,
+            style: Theme.of(context).textTheme.bodySmall,
+          ),
+        ],
+      ),
     );
   }
 }

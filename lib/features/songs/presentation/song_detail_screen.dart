@@ -1,3 +1,4 @@
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -6,7 +7,7 @@ import '../../../shared/widgets/common_widgets.dart';
 import '../../groups/data/groups_repository.dart';
 import '../data/songs_repository.dart';
 
-/// Detalle: tono original + tonos por vocalista (editable).
+/// Detalle del canto: tono original grande + tonos por vocalista.
 class SongDetailScreen extends ConsumerWidget {
   const SongDetailScreen({super.key, required this.songId});
 
@@ -16,7 +17,7 @@ class SongDetailScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final group = ref.watch(selectedGroupProvider);
     if (group == null) {
-      return Scaffold(appBar: AppBar(), body: const LoadingView());
+      return const Scaffold(body: LoadingView());
     }
     final songs = ref.watch(groupSongsProvider(group.id));
     final keys = ref.watch(
@@ -25,36 +26,57 @@ class SongDetailScreen extends ConsumerWidget {
     final members = ref.watch(groupMembersProvider(group.id));
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Canción')),
+      appBar: AppBar(),
       body: songs.when(
         loading: () => const LoadingView(),
         error: (e, _) => Center(child: Text('Error: $e')),
         data: (list) {
           final song = list.where((s) => s.songId == songId).firstOrNull;
           if (song == null) {
-            return const EmptyState(title: 'Canción no encontrada.');
+            return const EmptyState(
+              icon: CupertinoIcons.music_note,
+              title: 'Canto no encontrado.',
+            );
           }
           return ListView(
-            padding: const EdgeInsets.all(16),
+            padding: const EdgeInsets.all(20),
             children: [
               Text(
                 song.title,
-                style: Theme.of(context).textTheme.headlineMedium,
+                style: Theme.of(context).textTheme.displayLarge,
               ),
-              if (song.artist.isNotEmpty) Text(song.artist),
-              const SizedBox(height: 16),
-              Row(
-                children: [
-                  const Text('Tono original  '),
-                  KeyBadge(musicalKey: song.originalKey, large: true),
-                ],
+              if (song.artist.isNotEmpty)
+                Padding(
+                  padding: const EdgeInsets.only(top: 4),
+                  child: Text(
+                    song.artist,
+                    style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                          color: Colors.grey,
+                        ),
+                  ),
+                ),
+              const SizedBox(height: 28),
+              Container(
+                padding: const EdgeInsets.symmetric(
+                  vertical: 28,
+                  horizontal: 20,
+                ),
+                decoration: BoxDecoration(
+                  color: Theme.of(context).cardColor,
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                child: Column(
+                  children: [
+                    Text(
+                      'TONO ORIGINAL',
+                      style: Theme.of(context).textTheme.bodySmall,
+                    ),
+                    const SizedBox(height: 12),
+                    KeyBadge(musicalKey: song.originalKey, large: true),
+                  ],
+                ),
               ),
-              const SizedBox(height: 24),
-              Text(
-                'Vocalistas',
-                style: Theme.of(context).textTheme.titleMedium,
-              ),
-              const SizedBox(height: 8),
+              const SectionTitle(title: 'Tonos por vocalista'),
               keys.when(
                 loading: () => const LoadingView(),
                 error: (e, _) => Text('Error: $e'),
@@ -70,26 +92,36 @@ class SongDetailScreen extends ConsumerWidget {
                       final shown =
                           vocalists.isEmpty ? memberList : vocalists;
                       if (shown.isEmpty) {
-                        return const Text('Sin miembros en el grupo.');
+                        return const EmptyState(
+                          icon: CupertinoIcons.person_2,
+                          title: 'Sin miembros en el grupo.',
+                        );
                       }
-                      return Column(
+                      return GroupedSection(
                         children: [
                           for (final m in shown)
-                            Card(
-                              child: ListTile(
-                                title: Text(m.displayName ?? m.userId),
-                                trailing: KeyBadge(
-                                  musicalKey:
-                                      byUser[m.userId]?.key ?? '—',
+                            AppleRow(
+                              leading: CircleAvatar(
+                                backgroundColor:
+                                    CupertinoColors.systemGrey5,
+                                child: Text(
+                                  (m.displayName ?? '?').isEmpty
+                                      ? '?'
+                                      : (m.displayName ?? '?')[0]
+                                          .toUpperCase(),
                                 ),
-                                onTap: () => _editKey(
-                                  context,
-                                  ref,
-                                  group.id,
-                                  songId,
-                                  m.userId,
-                                  byUser[m.userId]?.key ?? song.originalKey,
-                                ),
+                              ),
+                              title: m.displayName ?? m.userId,
+                              trailing: KeyBadge(
+                                musicalKey: byUser[m.userId]?.key ?? '—',
+                              ),
+                              onTap: () => _editKey(
+                                context,
+                                ref,
+                                group.id,
+                                songId,
+                                m.userId,
+                                byUser[m.userId]?.key ?? song.originalKey,
                               ),
                             ),
                         ],
@@ -97,6 +129,12 @@ class SongDetailScreen extends ConsumerWidget {
                     },
                   );
                 },
+              ),
+              const SizedBox(height: 24),
+              Text(
+                'Toca un vocalista para ajustar su tono.',
+                textAlign: TextAlign.center,
+                style: Theme.of(context).textTheme.bodySmall,
               ),
             ],
           );
@@ -113,39 +151,58 @@ class SongDetailScreen extends ConsumerWidget {
     String userId,
     String current,
   ) {
-    var selected = MusicalKey.isValid(current) ? MusicalKey.parse(current).sharpName : 'C';
-    showDialog<void>(
+    var temp = MusicalKey.isValid(current)
+        ? MusicalKey.parse(current).sharpName
+        : 'C';
+    showCupertinoModalPopup<void>(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Tono del vocalista'),
-        content: DropdownButtonFormField<String>(
-          initialValue: selected,
-          items: [
-            for (final k in MusicalKey.allSharpNames)
-              DropdownMenuItem(value: k, child: Text(k)),
+      builder: (ctx) => Container(
+        height: 300,
+        color: Theme.of(ctx).cardColor,
+        child: Column(
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                CupertinoButton(
+                  onPressed: () => Navigator.pop(ctx),
+                  child: const Text('Cancelar'),
+                ),
+                CupertinoButton(
+                  onPressed: () async {
+                    await ref.read(songsRepositoryProvider).setVocalistKey(
+                          groupId: groupId,
+                          songId: songId,
+                          userId: userId,
+                          key: temp,
+                        );
+                    if (ctx.mounted) Navigator.pop(ctx);
+                  },
+                  child: const Text(
+                    'Guardar',
+                    style: TextStyle(fontWeight: FontWeight.w600),
+                  ),
+                ),
+              ],
+            ),
+            Expanded(
+              child: CupertinoPicker(
+                itemExtent: 44,
+                scrollController: FixedExtentScrollController(
+                  initialItem: MusicalKey.allSharpNames.indexOf(temp),
+                ),
+                onSelectedItemChanged: (i) =>
+                    temp = MusicalKey.allSharpNames[i],
+                children: [
+                  for (final k in MusicalKey.allSharpNames)
+                    Center(
+                      child: Text(k, style: const TextStyle(fontSize: 24)),
+                    ),
+                ],
+              ),
+            ),
           ],
-          onChanged: (v) {
-            if (v != null) selected = v;
-          },
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text('Cancelar'),
-          ),
-          FilledButton(
-            onPressed: () async {
-              await ref.read(songsRepositoryProvider).setVocalistKey(
-                    groupId: groupId,
-                    songId: songId,
-                    userId: userId,
-                    key: selected,
-                  );
-              if (ctx.mounted) Navigator.pop(ctx);
-            },
-            child: const Text('Guardar'),
-          ),
-        ],
       ),
     );
   }

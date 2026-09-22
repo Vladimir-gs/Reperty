@@ -1,15 +1,15 @@
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../core/utils/musical_key.dart';
-import '../../../core/utils/validators.dart';
 import '../../../shared/widgets/common_widgets.dart';
 import '../../auth/data/auth_repository.dart';
 import '../../groups/data/groups_repository.dart';
 import '../data/songs_repository.dart';
 
-/// Pantalla Songs: buscar, agregar, ver tono original.
+/// Cantos del grupo: buscar, agregar, ver tono original.
 class SongsScreen extends ConsumerStatefulWidget {
   const SongsScreen({super.key});
 
@@ -25,70 +25,82 @@ class _SongsScreenState extends ConsumerState<SongsScreen> {
     final group = ref.watch(selectedGroupProvider);
     if (group == null) {
       return Scaffold(
-        appBar: AppBar(title: const Text('Canciones')),
-        body: EmptyState(
-          title: 'Selecciona un grupo para ver su repertorio.',
-          action: FilledButton(
-            onPressed: () => context.go('/groups'),
-            child: const Text('Ver grupos'),
+        body: SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.all(20),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const LargeTitle(title: 'Cantos'),
+                Expanded(
+                  child: EmptyState(
+                    icon: CupertinoIcons.music_note,
+                    title: 'Selecciona un grupo para ver su repertorio.',
+                    action: PrimaryButton(
+                      label: 'Ver grupos',
+                      onPressed: () => context.go('/groups'),
+                    ),
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
       );
     }
     final songs = ref.watch(groupSongsProvider(group.id));
     return Scaffold(
-      appBar: AppBar(title: Text('Canciones · ${group.name}')),
-      body: Column(
-        children: [
-          Padding(
-            padding: const EdgeInsets.all(16),
-            child: SearchBar(
-              hintText: 'Buscar canción...',
-              leading: const Icon(Icons.search),
-              onChanged: (v) => setState(() => _query = v.toLowerCase()),
-            ),
-          ),
-          Expanded(
-            child: songs.when(
-              loading: () => const LoadingView(),
-              error: (e, _) => Center(child: Text('Error: $e')),
-              data: (list) {
-                final filtered = list
-                    .where((s) => s.title.toLowerCase().contains(_query))
-                    .toList();
-                if (filtered.isEmpty) {
-                  return const EmptyState(
-                    title: 'Sin canciones.\nAgrega la primera del repertorio.',
-                  );
-                }
-                return ListView.separated(
-                  padding: const EdgeInsets.symmetric(horizontal: 16),
-                  itemCount: filtered.length,
-                  separatorBuilder: (_, __) => const SizedBox(height: 8),
-                  itemBuilder: (context, i) {
-                    final s = filtered[i];
-                    return Card(
-                      child: ListTile(
-                        title: Text(s.title),
-                        subtitle: Text(
-                          s.artist.isEmpty ? 'Sin artista' : s.artist,
-                        ),
-                        trailing: KeyBadge(musicalKey: s.originalKey),
-                        onTap: () =>
-                            context.go('/songs/${s.songId}'),
-                      ),
+      floatingActionButton: FloatingActionButton(
+        onPressed: () => _showAdd(context, ref, group.id),
+        child: const Icon(CupertinoIcons.add),
+      ),
+      body: SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.all(20),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              LargeTitle(title: 'Cantos', subtitle: group.name),
+              AppleSearchField(
+                placeholder: 'Buscar canto…',
+                onChanged: (v) => setState(() => _query = v.toLowerCase()),
+              ),
+              Expanded(
+                child: songs.when(
+                  loading: () => const LoadingView(),
+                  error: (e, _) => Center(child: Text('Error: $e')),
+                  data: (list) {
+                    final filtered = list
+                        .where((s) => s.title.toLowerCase().contains(_query))
+                        .toList();
+                    if (filtered.isEmpty) {
+                      return const EmptyState(
+                        icon: CupertinoIcons.music_note,
+                        title:
+                            'Sin cantos.\nAgrega el primero del repertorio.',
+                      );
+                    }
+                    return GroupedSection(
+                      children: [
+                        for (final s in filtered)
+                          AppleRow(
+                            title: s.title,
+                            subtitle: s.artist.isEmpty
+                                ? 'Tono original'
+                                : s.artist,
+                            trailing: KeyBadge(musicalKey: s.originalKey),
+                            showChevron: true,
+                            onTap: () =>
+                                context.go('/songs/${s.songId}'),
+                          ),
+                      ],
                     );
                   },
-                );
-              },
-            ),
+                ),
+              ),
+            ],
           ),
-        ],
-      ),
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: () => _showAdd(context, ref, group.id),
-        label: const Text('Agregar'),
-        icon: const Icon(Icons.add),
+        ),
       ),
     );
   }
@@ -96,62 +108,111 @@ class _SongsScreenState extends ConsumerState<SongsScreen> {
   void _showAdd(BuildContext context, WidgetRef ref, String groupId) {
     final title = TextEditingController();
     final artist = TextEditingController();
-    final key = TextEditingController(text: 'C');
     final form = GlobalKey<FormState>();
-    showDialog<void>(
+    var key = 'C';
+    showCupertinoDialog<void>(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Nueva canción'),
-        content: Form(
-          key: form,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              TextFormField(
-                controller: title,
-                decoration: const InputDecoration(labelText: 'Título'),
-                validator: (v) => Validators.required(v),
-              ),
-              TextFormField(
-                controller: artist,
-                decoration: const InputDecoration(labelText: 'Artista'),
-              ),
-              DropdownButtonFormField<String>(
-                initialValue: key.text,
-                decoration: const InputDecoration(labelText: 'Tono original'),
-                items: [
-                  for (final k in MusicalKey.allSharpNames)
-                    DropdownMenuItem(value: k, child: Text(k)),
-                ],
-                onChanged: (v) {
-                  if (v != null) key.text = v;
-                },
-              ),
-            ],
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setDialogState) => CupertinoAlertDialog(
+          title: const Text('Nuevo canto'),
+          content: Form(
+            key: form,
+            child: Column(
+              children: [
+                const SizedBox(height: 12),
+                CupertinoTextField(
+                  controller: title,
+                  placeholder: 'Título',
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 12,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                CupertinoTextField(
+                  controller: artist,
+                  placeholder: 'Artista (opcional)',
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 12,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                CupertinoButton(
+                  padding: EdgeInsets.zero,
+                  onPressed: () => _pickKey(
+                    ctx,
+                    (v) => setDialogState(() => key = v),
+                  ),
+                  child: Text('Tono original: $key'),
+                ),
+              ],
+            ),
           ),
+          actions: [
+            CupertinoDialogAction(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('Cancelar'),
+            ),
+            CupertinoDialogAction(
+              isDefaultAction: true,
+              onPressed: () async {
+                if (!form.currentState!.validate() ||
+                    title.text.trim().isEmpty) {
+                  return;
+                }
+                final uid = ref.read(authStateProvider).valueOrNull?.uid;
+                if (uid == null) return;
+                await ref.read(songsRepositoryProvider).addSongToGroup(
+                      groupId: groupId,
+                      title: title.text,
+                      artist: artist.text,
+                      originalKey: key,
+                      addedBy: uid,
+                    );
+                if (ctx.mounted) Navigator.pop(ctx);
+              },
+              child: const Text('Guardar'),
+            ),
+          ],
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text('Cancelar'),
-          ),
-          FilledButton(
-            onPressed: () async {
-              if (!form.currentState!.validate()) return;
-              final uid = ref.read(authStateProvider).valueOrNull?.uid;
-              if (uid == null) return;
-              await ref.read(songsRepositoryProvider).addSongToGroup(
-                    groupId: groupId,
-                    title: title.text,
-                    artist: artist.text,
-                    originalKey: key.text,
-                    addedBy: uid,
-                  );
-              if (ctx.mounted) Navigator.pop(ctx);
-            },
-            child: const Text('Guardar'),
-          ),
-        ],
+      ),
+    );
+  }
+
+  void _pickKey(BuildContext context, ValueChanged<String> onPick) {
+    var temp = 'C';
+    showCupertinoModalPopup<void>(
+      context: context,
+      builder: (ctx) => Container(
+        height: 280,
+        color: Theme.of(ctx).cardColor,
+        child: Column(
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: [
+                CupertinoButton(
+                  onPressed: () {
+                    onPick(temp);
+                    Navigator.pop(ctx);
+                  },
+                  child: const Text('Listo'),
+                ),
+              ],
+            ),
+            Expanded(
+              child: CupertinoPicker(
+                itemExtent: 40,
+                onSelectedItemChanged: (i) =>
+                    temp = MusicalKey.allSharpNames[i],
+                children: [
+                  for (final k in MusicalKey.allSharpNames) Text(k),
+                ],
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

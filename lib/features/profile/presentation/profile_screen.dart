@@ -1,6 +1,8 @@
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../shared/widgets/common_widgets.dart';
 import '../../auth/data/auth_repository.dart';
 
 /// Perfil del usuario actual + cerrar sesión.
@@ -11,43 +13,84 @@ class ProfileScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final profile = ref.watch(currentProfileProvider);
     return Scaffold(
-      appBar: AppBar(title: const Text('Perfil')),
-      body: profile.when(
-        loading: () =>
-            const Center(child: CircularProgressIndicator()),
-        error: (e, _) => Center(child: Text('Error: $e')),
-        data: (user) {
-          if (user == null) {
-            return const Center(child: Text('Sin sesión.'));
-          }
-          return ListView(
-            padding: const EdgeInsets.all(16),
-            children: [
-              CircleAvatar(
-                radius: 36,
-                backgroundImage: user.photoUrl != null
-                    ? NetworkImage(user.photoUrl!)
-                    : null,
-                child: user.photoUrl == null
-                    ? Text(user.name.isEmpty ? '?' : user.name[0])
-                    : null,
-              ),
-              const SizedBox(height: 12),
-              Text(
-                user.name,
-                style: Theme.of(context).textTheme.headlineSmall,
-                textAlign: TextAlign.center,
-              ),
-              Text(user.email, textAlign: TextAlign.center),
-              const SizedBox(height: 24),
-              OutlinedButton(
-                onPressed: () =>
-                    ref.read(authRepositoryProvider).signOut(),
-                child: const Text('Cerrar sesión'),
-              ),
-            ],
-          );
-        },
+      body: SafeArea(
+        child: profile.when(
+          loading: () => const LoadingView(),
+          error: (e, _) => Center(child: Text('Error: $e')),
+          data: (user) {
+            if (user == null) {
+              return const Center(child: Text('Sin sesión.'));
+            }
+            return ListView(
+              padding: const EdgeInsets.all(20),
+              children: [
+                const LargeTitle(title: 'Perfil'),
+                Center(
+                  child: Column(
+                    children: [
+                      CircleAvatar(
+                        radius: 52,
+                        backgroundColor: CupertinoColors.systemGrey5,
+                        backgroundImage: user.photoUrl != null
+                            ? NetworkImage(user.photoUrl!)
+                            : null,
+                        child: user.photoUrl == null
+                            ? Text(
+                                user.name.isEmpty
+                                    ? '?'
+                                    : user.name[0].toUpperCase(),
+                                style: const TextStyle(fontSize: 36),
+                              )
+                            : null,
+                      ),
+                      const SizedBox(height: 12),
+                      Text(
+                        user.name,
+                        style:
+                            Theme.of(context).textTheme.headlineMedium,
+                      ),
+                      Text(
+                        user.email,
+                        style: Theme.of(context).textTheme.bodySmall,
+                      ),
+                    ],
+                  ),
+                ),
+                const SectionTitle(title: 'Cuenta'),
+                GroupedSection(
+                  children: [
+                    AppleRow(
+                      title: 'Nombre',
+                      trailing: Text(
+                        user.name,
+                        style: Theme.of(context).textTheme.bodySmall,
+                      ),
+                    ),
+                    AppleRow(
+                      title: 'Email',
+                      trailing: Text(
+                        user.email,
+                        style: Theme.of(context).textTheme.bodySmall,
+                      ),
+                    ),
+                    AppleRow(
+                      title: 'Cerrar sesión',
+                      onTap: () =>
+                          ref.read(authRepositoryProvider).signOut(),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                Center(
+                  child: Text(
+                    'Reperty · v0.1.0',
+                    style: Theme.of(context).textTheme.bodySmall,
+                  ),
+                ),
+              ],
+            );
+          },
+        ),
       ),
     );
   }

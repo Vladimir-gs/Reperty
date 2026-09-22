@@ -1,3 +1,4 @@
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -104,7 +105,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
   );
 });
 
-/// Bottom Navigation (NavigationBar Material 3).
+/// Tab Bar estilo iOS.
 class ScaffoldWithNav extends StatelessWidget {
   const ScaffoldWithNav({super.key, required this.shell});
 
@@ -114,18 +115,33 @@ class ScaffoldWithNav extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       body: shell,
-      bottomNavigationBar: NavigationBar(
-        selectedIndex: shell.currentIndex,
-        onDestinationSelected: (i) => shell.goBranch(
+      bottomNavigationBar: CupertinoTabBar(
+        currentIndex: shell.currentIndex,
+        onTap: (i) => shell.goBranch(
           i,
           initialLocation: i == shell.currentIndex,
         ),
-        destinations: const [
-          NavigationDestination(icon: Icon(Icons.home), label: 'Home'),
-          NavigationDestination(icon: Icon(Icons.music_note), label: 'Songs'),
-          NavigationDestination(icon: Icon(Icons.queue_music), label: 'Setlists'),
-          NavigationDestination(icon: Icon(Icons.group), label: 'Grupo'),
-          NavigationDestination(icon: Icon(Icons.person), label: 'Perfil'),
+        items: const [
+          BottomNavigationBarItem(
+            icon: Icon(CupertinoIcons.house),
+            label: 'Inicio',
+          ),
+          BottomNavigationBarItem(
+            icon: Icon(CupertinoIcons.music_note),
+            label: 'Cantos',
+          ),
+          BottomNavigationBarItem(
+            icon: Icon(CupertinoIcons.list_bullet),
+            label: 'Setlists',
+          ),
+          BottomNavigationBarItem(
+            icon: Icon(CupertinoIcons.group),
+            label: 'Grupo',
+          ),
+          BottomNavigationBarItem(
+            icon: Icon(CupertinoIcons.person),
+            label: 'Perfil',
+          ),
         ],
       ),
     );

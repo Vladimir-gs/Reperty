@@ -1,3 +1,4 @@
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -15,76 +16,124 @@ class SetlistsScreen extends ConsumerWidget {
     final group = ref.watch(selectedGroupProvider);
     if (group == null) {
       return Scaffold(
-        appBar: AppBar(title: const Text('Setlists')),
-        body: EmptyState(
-          title: 'Selecciona un grupo para ver sus setlists.',
-          action: FilledButton(
-            onPressed: () => context.go('/groups'),
-            child: const Text('Ver grupos'),
+        body: SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.all(20),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const LargeTitle(title: 'Setlists'),
+                Expanded(
+                  child: EmptyState(
+                    icon: CupertinoIcons.list_bullet,
+                    title: 'Selecciona un grupo para ver sus setlists.',
+                    action: PrimaryButton(
+                      label: 'Ver grupos',
+                      onPressed: () => context.go('/groups'),
+                    ),
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
       );
     }
     final setlists = ref.watch(setlistsProvider(group.id));
     return Scaffold(
-      appBar: AppBar(title: Text('Setlists · ${group.name}')),
-      body: setlists.when(
-        loading: () => const LoadingView(),
-        error: (e, _) => Center(child: Text('Error: $e')),
-        data: (list) {
-          if (list.isEmpty) {
-            return const EmptyState(
-              title: 'Sin setlists.\nCrea el primero (ej. Domingo 21).',
-            );
-          }
-          return ListView.separated(
-            padding: const EdgeInsets.all(16),
-            itemCount: list.length,
-            separatorBuilder: (_, __) => const SizedBox(height: 8),
-            itemBuilder: (context, i) {
-              final s = list[i];
-              return Card(
-                child: ListTile(
-                  title: Text(s.name),
-                  subtitle: Text(
-                    s.date != null
-                        ? '${s.date!.day}/${s.date!.month}/${s.date!.year}'
-                        : (s.description.isEmpty ? 'Sin fecha' : s.description),
-                  ),
-                  trailing: const Icon(Icons.chevron_right),
-                  onTap: () => context.go('/setlists/${s.id}'),
-                ),
-              );
-            },
-          );
-        },
-      ),
-      floatingActionButton: FloatingActionButton.extended(
+      floatingActionButton: FloatingActionButton(
         onPressed: () => _showCreate(context, ref, group.id),
-        label: const Text('Nuevo'),
-        icon: const Icon(Icons.add),
+        child: const Icon(CupertinoIcons.add),
+      ),
+      body: SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.all(20),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              LargeTitle(title: 'Setlists', subtitle: group.name),
+              Expanded(
+                child: setlists.when(
+                  loading: () => const LoadingView(),
+                  error: (e, _) => Center(child: Text('Error: $e')),
+                  data: (list) {
+                    if (list.isEmpty) {
+                      return const EmptyState(
+                        icon: CupertinoIcons.list_bullet,
+                        title:
+                            'Sin setlists.\nCrea el primero (ej. Domingo 21).',
+                      );
+                    }
+                    return GroupedSection(
+                      children: [
+                        for (final s in list)
+                          AppleRow(
+                            leading: Container(
+                              width: 44,
+                              height: 44,
+                              decoration: BoxDecoration(
+                                color: CupertinoColors.systemGrey5,
+                                borderRadius: BorderRadius.circular(10),
+                              ),
+                              child: Center(
+                                child: Text(
+                                  s.date != null
+                                      ? '${s.date!.day}'
+                                      : '♪',
+                                  style: const TextStyle(
+                                    fontSize: 17,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                              ),
+                            ),
+                            title: s.name,
+                            subtitle: s.date != null
+                                ? '${s.date!.day}/${s.date!.month}/${s.date!.year}'
+                                : (s.description.isEmpty
+                                    ? 'Sin fecha'
+                                    : s.description),
+                            showChevron: true,
+                            onTap: () => context.go('/setlists/${s.id}'),
+                          ),
+                      ],
+                    );
+                  },
+                ),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }
 
   void _showCreate(BuildContext context, WidgetRef ref, String groupId) {
     final name = TextEditingController();
-    showDialog<void>(
+    showCupertinoDialog<void>(
       context: context,
-      builder: (ctx) => AlertDialog(
+      builder: (ctx) => CupertinoAlertDialog(
         title: const Text('Nuevo setlist'),
-        content: TextField(
-          controller: name,
-          decoration: const InputDecoration(
-            labelText: 'Nombre (ej. Domingo 21 Septiembre)',
-          ),
+        content: Column(
+          children: [
+            const SizedBox(height: 12),
+            CupertinoTextField(
+              controller: name,
+              placeholder: 'Domingo 21 Septiembre',
+              padding: const EdgeInsets.symmetric(
+                horizontal: 12,
+                vertical: 12,
+              ),
+            ),
+          ],
         ),
         actions: [
-          TextButton(
+          CupertinoDialogAction(
             onPressed: () => Navigator.pop(ctx),
             child: const Text('Cancelar'),
           ),
-          FilledButton(
+          CupertinoDialogAction(
+            isDefaultAction: true,
             onPressed: () async {
               if (name.text.trim().isEmpty) return;
               final uid = ref.read(authStateProvider).valueOrNull?.uid ?? '';
