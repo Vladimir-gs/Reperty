@@ -3,7 +3,7 @@ import 'package:flutter/widget_previews.dart';
 
 import 'common_widgets.dart';
 
-/// Previews visibles en el IDE sin compilar la app completa.
+/// Previews visibles en el IDE sin compilar la app completaa.
 /// Android Studio / VS Code con plugin Flutter reciente: panel
 /// "Flutter Widget Preview". Alternativa siempre disponible: hot reload (r).
 
