@@ -1,0 +1,24 @@
+# Flutter / Dart
+.dart_tool/
+.flutter-plugins
+.flutter-plugins-dependencies
+.packages
+build/
+ios/Flutter/Flutter.podspec
+ios/Pods/
+android/.gradle/
+android/local.properties
+*.iml
+.idea/
+.vscode/*
+
+# Firebase
+lib/firebase_options.dart
+!lib/firebase_options.example.dart
+google-services.json
+GoogleService-Info.plist
+firebase-debug.log
+
+# Misc
+.DS_Store
+Thumbs.db

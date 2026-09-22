@@ -1,0 +1,97 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function isMember(groupId) {
+      return signedIn() &&
+        exists(/databases/$(database)/documents/groups/$(groupId)/members/$(request.auth.uid));
+    }
+
+    function memberRole(groupId) {
+      return get(/databases/$(database)/documents/groups/$(groupId)/members/$(request.auth.uid)).data.role;
+    }
+
+    function isOwnerOrAdmin(groupId) {
+      return isMember(groupId) && memberRole(groupId) in ['owner', 'admin'];
+    }
+
+    // ---------- Users ----------
+    match /users/{userId} {
+      allow read: if signedIn() && (request.auth.uid == userId);
+      allow create: if signedIn() && request.auth.uid == userId;
+      allow update: if signedIn() && request.auth.uid == userId;
+      allow delete: if false;
+
+      // Índice de membresías del propio usuario.
+      // Evita collectionGroup queries (que fallarían por reglas) y permite
+      // listar "mis grupos" offline con una sola lectura local.
+      match /groups/{groupId} {
+        allow read, write: if signedIn() && request.auth.uid == userId;
+      }
+    }
+
+    // ---------- Mapa código -> grupo ----------
+    // Los códigos son secretos compartibles; cualquier usuario autenticado
+    // puede resolver UN código concreto (get por id), pero no listarlos.
+    // Esto permite unirse sin ser miembro todavía.
+    match /groupCodes/{code} {
+      allow get: if signedIn();
+      allow list: if false;
+      allow create, update: if signedIn();
+      allow delete: if false;
+    }
+
+    // ---------- Songs (catálogo canónico) ----------
+    match /songs/{songId} {
+      allow read: if signedIn();
+      allow create, update: if signedIn();
+      allow delete: if false; // MVP: no borrado físico del catálogo
+    }
+
+    // ---------- Groups ----------
+    match /groups/{groupId} {
+      allow read: if isMember(groupId);
+      allow create: if signedIn();
+      allow update: if isOwnerOrAdmin(groupId);
+      allow delete: if false;
+
+      match /members/{memberId} {
+        allow read: if isMember(groupId);
+        allow create: if signedIn() &&
+          (request.auth.uid == memberId || isOwnerOrAdmin(groupId));
+        allow update: if isOwnerOrAdmin(groupId) ||
+          (signedIn() && request.auth.uid == memberId);
+        allow delete: if isOwnerOrAdmin(groupId) ||
+          (signedIn() && request.auth.uid == memberId);
+      }
+
+      match /songs/{songId} {
+        allow read: if isMember(groupId);
+        allow create, update: if isMember(groupId);
+        allow delete: if isOwnerOrAdmin(groupId);
+
+        match /keys/{vocalistId} {
+          allow read: if isMember(groupId);
+          allow create, update: if isMember(groupId);
+          allow delete: if isMember(groupId);
+        }
+      }
+
+      match /setlists/{setlistId} {
+        allow read: if isMember(groupId);
+        allow create, update: if isMember(groupId);
+        allow delete: if isOwnerOrAdmin(groupId);
+
+        match /items/{itemId} {
+          allow read: if isMember(groupId);
+          allow create, update: if isMember(groupId);
+          allow delete: if isMember(groupId);
+        }
+      }
+    }
+  }
+}
