@@ -1,5 +1,5 @@
-// Archivo de ejemplo. Generar el real con `flutterfire configure`.
-// NO commitear el archivo real (ver .gitignore).
+// Archivo de referencia. El archivo real es `lib/firebase_options.dart`
+// (versionado; sus claves van embebidas en la app).
 import 'package:firebase_core/firebase_core.dart' show FirebaseOptions;
 import 'package:flutter/foundation.dart'
     show defaultTargetPlatform, TargetPlatform;
@@ -26,7 +26,7 @@ class DefaultFirebaseOptions {
     messagingSenderId: 'REEMPLAZAR',
     projectId: 'REEMPLAZAR',
     storageBucket: 'REEMPLAZAR',
-    iosBundleId: 'com.reperty.app',
+    iosBundleId: 'com.reperty.reperty',
   );
 
   // ignore: unused_element

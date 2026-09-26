@@ -13,11 +13,8 @@ android/local.properties
 .vscode/*
 
 # Firebase
-lib/firebase_options.dart
-!lib/firebase_options.example.dart
-google-services.json
-GoogleService-Info.plist
 firebase-debug.log
+firebase-debug.pid
 
 # Misc
 .DS_Store

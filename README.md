@@ -32,7 +32,9 @@ MVP multiplataforma (Android + iOS) con **Flutter + Firebase**, diseño **offlin
    flutterfire configure
    ```
 
-   Esto genera `lib/firebase_options.dart` (ignorado por git, ver `firebase_options.example.dart`).
+   Genera `lib/firebase_options.dart` (versionado, junto con
+   `ios/Runner/GoogleService-Info.plist` y `android/app/google-services.json`).
+   Ver `firebase_options.example.dart` como referencia.
 
 3. Desplegar reglas de Firestore:
 
@@ -45,6 +47,44 @@ MVP multiplataforma (Android + iOS) con **Flutter + Firebase**, diseño **offlin
    ```bash
    flutter run
    ```
+
+## CI/CD (Codemagic)
+
+Los builds de iOS corren en [Codemagic](https://codemagic.io) (la app se
+compila en Mac en la nube). La configuración está versionada en
+`codemagic.yaml`; al existir ese archivo, Codemagic **ignora** el workflow
+configurado en su UI.
+
+| Workflow | Trigger | Qué hace |
+| --- | --- | --- |
+| `ios-build-check` | push a `master` | `flutter analyze` + `flutter test` + `flutter build ios --debug --no-codesign` (valida que compile, sin firma) |
+| `ios-device-dev` | manual (UI) | `flutter build ipa --release` firmado con perfil **Development** para instalar en un iPhone físico |
+
+> **Nota SPM:** el primer paso de ambos workflows es
+> `flutter config --enable-swift-package-manager` + `flutter pub get`,
+> que genera `ios/Flutter/ephemeral/Packages/FlutterGeneratedPluginSwiftPackage`
+> (ignorado por git). Sin ese paso, Codemagic falla con
+> `Scheme "Runner" not found from repository`.
+
+### Probar en un iPhone físico
+
+Requiere **Apple Developer Program** (la cuenta gratuita no sirve para
+firmar en CI). Pasos en Codemagic:
+
+1. Crear la cuenta de equipo en [developer.apple.com](https://developer.apple.com/programs/enroll/)
+   y una **App Store Connect API key** (Users and Access > Integrations).
+2. En Codemagic: **Team integrations > Developer Portal** → agregar la key (`.p8`, Key ID, Issuer ID).
+3. Registrar el UDID de tu iPhone en
+   [developer.apple.com](https://developer.apple.com/account/resources/devices/)
+   (o vía **Team settings > iOS test devices** de Codemagic, que envía un
+   link de registro al dispositivo).
+4. Generar y subir en **Team settings > codemagic.yaml settings > Code signing identities**:
+   certificado **Apple Development** + provisioning profile **Development**
+   para `com.reperty.reperty` incluyendo el UDID del paso 3.
+5. Ejecutar manualmente el workflow **`ios-device-dev`** y descargar el
+   `.ipa` del artefacto `build/ios/ipa/*.ipa`.
+6. Instalar en el iPhone (Xcode/Apple Configurator, o una herramienta de
+   sideload como AltStore). El perfil de desarrollo caduca en 1 año.
 
 ## Estructura
 

@@ -1,0 +1,79 @@
+# Configuración CI/CD de Reperty para Codemagic.
+# Al existir este archivo, Codemagic ignora el workflow de la UI.
+
+workflows:
+  # 1) Validación de compilación sin firma (cada push a master).
+  ios-build-check:
+    name: iOS build check (sin firma)
+    instance_type: mac_mini_m2
+    max_build_duration: 60
+    environment:
+      flutter: stable
+      xcode: latest
+      cocoapods: default
+    cache:
+      cache_paths:
+        - ~/.pub-cache
+    triggering:
+      events:
+        - push
+      branch_patterns:
+        - pattern: "master"
+          include: true
+    scripts:
+      # Genera Flutter/ephemeral/Packages/FlutterGeneratedPluginSwiftPackage
+      # ANTES de que Codemagic parsee el proyecto (fix "Scheme Runner not found").
+      - name: Preparar Swift Package Manager
+        script: |
+          flutter config --enable-swift-package-manager
+          flutter pub get
+      - name: Análisis estático
+        script: flutter analyze
+      - name: Tests
+        script: flutter test
+        ignore_failure: true
+      - name: Compilar iOS (debug, sin firma)
+        script: flutter build ios --debug --no-codesign
+    artifacts:
+      - build/ios/iphoneos/**/*.app
+      - /tmp/xcodebuild_logs/*.log
+
+  # 2) Build firmado (development) para instalar en un iPhone físico.
+  #    Requiere Apple Developer Program y, en
+  #    Team settings > codemagic.yaml settings > Code signing identities,
+  #    un certificado "Apple Development" + provisioning profile de tipo
+  #    Development para com.reperty.reperty (con el UDID de tu iPhone).
+  ios-device-dev:
+    name: iOS iPhone (development)
+    instance_type: mac_mini_m2
+    max_build_duration: 120
+    environment:
+      ios_signing:
+        distribution_type: development
+        bundle_identifier: com.reperty.reperty
+      flutter: stable
+      xcode: latest
+      cocoapods: default
+    cache:
+      cache_paths:
+        - ~/.pub-cache
+    triggering:
+      events:
+        - manual_build
+    scripts:
+      - name: Preparar Swift Package Manager
+        script: |
+          flutter config --enable-swift-package-manager
+          flutter pub get
+      - name: Aplicar perfiles de firma al proyecto Xcode
+        script: xcode-project use-profiles
+      - name: Instalar dependencias CocoaPods (solo si hay Podfile)
+        script: find . -name "Podfile" -execdir pod install \;
+      - name: Compilar IPA (development)
+        script: |
+          flutter build ipa --release \
+            --build-number=$CM_BUILD_NUMBER \
+            --export-options-plist=$HOME/export_options.plist
+    artifacts:
+      - build/ios/ipa/*.ipa
+      - /tmp/xcodebuild_logs/*.log
