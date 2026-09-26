@@ -8,6 +8,7 @@ import '../../../shared/widgets/common_widgets.dart';
 import '../../auth/data/auth_repository.dart';
 import '../../groups/data/groups_repository.dart';
 import '../../setlists/data/setlists_repository.dart';
+import '../../setlists/domain/setlist_models.dart';
 import '../../songs/data/songs_repository.dart';
 
 /// Inicio: saludo grande, grupo actual, próximo setlist y conteos.
@@ -17,7 +18,7 @@ class HomeScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final profile = ref.watch(currentProfileProvider);
-    final group = ref.watch(selectedGroupProvider);
+    final group = ref.watch(currentGroupProvider);
     final myGroups = ref.watch(myGroupsProvider);
 
     return Scaffold(
@@ -29,6 +30,7 @@ class HomeScreen extends ConsumerWidget {
               loading: () => const LoadingView(),
               error: (e, _) => Text('Error: $e'),
               data: (user) => Row(
+                crossAxisAlignment: CrossAxisAlignment.center,
                 children: [
                   Expanded(
                     child: Column(
@@ -42,23 +44,34 @@ class HomeScreen extends ConsumerWidget {
                                   ),
                         ),
                         Text(
-                          user == null
-                              ? 'Hola'
-                              : firstName(user.name),
+                          user == null ? 'Hola' : firstName(user.name),
                           style: Theme.of(context).textTheme.displayLarge,
                         ),
                       ],
                     ),
                   ),
-                  CupertinoButton(
-                    padding: EdgeInsets.zero,
-                    onPressed: () => _showSwitchGroup(context, ref),
-                    child: const Icon(CupertinoIcons.arrow_2_circlepath),
+                  GestureDetector(
+                    onTap: () => context.go('/profile'),
+                    child: CircleAvatar(
+                      radius: 24,
+                      backgroundColor: CupertinoColors.systemGrey5,
+                      backgroundImage: user?.photoUrl != null
+                          ? NetworkImage(user!.photoUrl!)
+                          : null,
+                      child: user?.photoUrl == null
+                          ? Text(
+                              (user == null || user.name.isEmpty)
+                                  ? '?'
+                                  : user.name[0].toUpperCase(),
+                              style: const TextStyle(fontSize: 20),
+                            )
+                          : null,
+                    ),
                   ),
                 ],
               ),
             ),
-            const SizedBox(height: 8),
+            const SizedBox(height: 20),
             myGroups.when(
               loading: () => const LoadingView(message: 'Cargando grupos…'),
               error: (e, _) => Text('Error: $e'),
@@ -74,17 +87,70 @@ class HomeScreen extends ConsumerWidget {
                     ),
                   );
                 }
-                final current = group ?? list.first;
+                final current = group;
+                if (current == null) {
+                  // Varios grupos y ninguno elegido: selector inicial.
+                  return Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const LargeTitle(
+                        title: 'Elige un grupo',
+                        subtitle: '¿Con cuál quieres trabajar hoy?',
+                      ),
+                      GroupedSection(
+                        children: [
+                          for (final g in list)
+                            AppleRow(
+                              leading: Container(
+                                width: 44,
+                                height: 44,
+                                decoration: BoxDecoration(
+                                  gradient:
+                                      AppTheme.brandGradientStrong,
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                                child: const Icon(
+                                  CupertinoIcons.music_note_2,
+                                  color: CupertinoColors.white,
+                                ),
+                              ),
+                              title: g.name,
+                              subtitle: 'Código ${g.code}',
+                              showChevron: true,
+                              onTap: () => ref
+                                  .read(selectedGroupProvider.notifier)
+                                  .state = g,
+                            ),
+                        ],
+                      ),
+                    ],
+                  );
+                }
                 return Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      current.name,
-                      style: Theme.of(context).textTheme.titleLarge,
-                    ),
-                    Text(
-                      'Código ${current.code}',
-                      style: Theme.of(context).textTheme.bodySmall,
+                    GroupedSection(
+                      children: [
+                        AppleRow(
+                          leading: Container(
+                            width: 44,
+                            height: 44,
+                            decoration: BoxDecoration(
+                              gradient: AppTheme.brandGradientStrong,
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: const Icon(
+                              CupertinoIcons.music_note_2,
+                              color: CupertinoColors.white,
+                            ),
+                          ),
+                          title: current.name,
+                          subtitle:
+                              'Código ${current.code} · toca para cambiar',
+                          showChevron: true,
+                          onTap: () => _showSwitchGroup(context, ref),
+                        ),
+                      ],
                     ),
                     const SectionTitle(title: 'Próximo setlist'),
                     _NextSetlist(groupId: current.id),
@@ -174,28 +240,77 @@ class _NextSetlist extends ConsumerWidget {
             ),
           );
         }
-        final next = list.first;
-        return GroupedSection(
+        final upcoming = list.where((s) => !s.isClosed).toList()
+          ..sort((a, b) {
+            if (a.date == null && b.date == null) return 0;
+            if (a.date == null) return 1;
+            if (b.date == null) return -1;
+            return a.date!.compareTo(b.date!);
+          });
+        if (upcoming.isEmpty) {
+          return Container(
+            padding: const EdgeInsets.all(24),
+            decoration: BoxDecoration(
+              color: Theme.of(context).cardColor,
+              borderRadius: BorderRadius.circular(AppTheme.cardRadius),
+            ),
+            child: const EmptyState(
+              icon: CupertinoIcons.check_mark_circled,
+              title: 'Sin setlists próximos.',
+            ),
+          );
+        }
+        final next = upcoming.first;
+        return HeroCard(
+          onTap: () => context.go('/setlists/${next.id}'),
           children: [
-            AppleRow(
-              leading: Container(
-                width: 44,
-                height: 44,
-                decoration: BoxDecoration(
-                  color: AppTheme.iosBlue.withAlpha(22),
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: const Icon(
-                  CupertinoIcons.music_note_list,
-                  color: AppTheme.iosBlue,
-                ),
+            const Text(
+              'PRÓXIMO SETLIST',
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+                color: CupertinoColors.white,
               ),
-              title: next.name,
-              subtitle: next.date != null
+            ),
+            const SizedBox(height: 6),
+            Text(
+              next.name,
+              style: const TextStyle(
+                fontSize: 26,
+                fontWeight: FontWeight.w700,
+                color: CupertinoColors.white,
+              ),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              next.date != null
                   ? '${next.date!.day}/${next.date!.month}/${next.date!.year}'
-                  : (next.description.isEmpty ? 'Sin fecha' : next.description),
-              showChevron: true,
-              onTap: () => context.go('/setlists/${next.id}'),
+                  : (next.description.isEmpty
+                      ? 'Sin fecha'
+                      : next.description),
+              style: TextStyle(
+                fontSize: 15,
+                color: CupertinoColors.white.withAlpha(200),
+              ),
+            ),
+            const SizedBox(height: 16),
+            const Row(
+              children: [
+                Text(
+                  'Abrir',
+                  style: TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w600,
+                    color: CupertinoColors.white,
+                  ),
+                ),
+                SizedBox(width: 4),
+                Icon(
+                  CupertinoIcons.chevron_right,
+                  size: 16,
+                  color: CupertinoColors.white,
+                ),
+              ],
             ),
           ],
         );

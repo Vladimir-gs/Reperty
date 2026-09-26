@@ -22,7 +22,7 @@ class _SongsScreenState extends ConsumerState<SongsScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final group = ref.watch(selectedGroupProvider);
+    final group = ref.watch(currentGroupProvider);
     if (group == null) {
       return Scaffold(
         body: SafeArea(
@@ -80,8 +80,9 @@ class _SongsScreenState extends ConsumerState<SongsScreen> {
                             'Sin cantos.\nAgrega el primero del repertorio.',
                       );
                     }
-                    return GroupedSection(
-                      children: [
+                    return SingleChildScrollView(
+                      child: GroupedSection(
+                        children: [
                         for (final s in filtered)
                           AppleRow(
                             title: s.title,
@@ -93,7 +94,8 @@ class _SongsScreenState extends ConsumerState<SongsScreen> {
                             onTap: () =>
                                 context.go('/songs/${s.songId}'),
                           ),
-                      ],
+                        ],
+                      ),
                     );
                   },
                 ),

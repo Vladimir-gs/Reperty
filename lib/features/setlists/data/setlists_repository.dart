@@ -21,6 +21,13 @@ final setlistItemsProvider = StreamProvider.autoDispose
       .watchItems(args.groupId, args.setlistId);
 });
 
+final setlistProvider = StreamProvider.autoDispose
+    .family<Setlist?, ({String groupId, String setlistId})>((ref, args) {
+  return ref
+      .watch(setlistsRepositoryProvider)
+      .watchSetlist(args.groupId, args.setlistId);
+});
+
 class SetlistsRepository {
   SetlistsRepository(this._db);
 
@@ -36,13 +43,33 @@ class SetlistsRepository {
       _setlists(groupId).doc(setlistId).collection('items');
 
   Stream<List<Setlist>> watchSetlists(String groupId) {
-    return _setlists(groupId).orderBy('date', descending: true).snapshots().map(
+    return _setlists(groupId).orderBy('date').snapshots().map(
           (s) => s.docs.map(Setlist.fromDoc).toList(),
         );
   }
 
-  Stream<List<SetlistSong>> watchItems(String groupId, String setlistId) {
-    return _items(groupId, setlistId)
+  Stream<Setlist?> watchSetlist(String groupId, String setlistId) {
+    return _setlists(groupId).doc(setlistId).snapshots().map(
+          (d) => d.exists ? Setlist.fromDoc(d) : null,
+        );
+  }
+
+  Future<void> updateSetlist({
+    required String groupId,
+    required String setlistId,
+    String? name,
+    String? description,
+    DateTime? date,
+  }) async {
+    await _setlists(groupId).doc(setlistId).update({
+      if (name != null) 'name': name.trim(),
+      if (description != null) 'description': description.trim(),
+      if (date != null) 'date': Timestamp.fromDate(date),
+      'updatedAt': Timestamp.fromDate(DateTime.now()),
+    });
+  }
+
+  Stream<List<SetlistSong>> watchItems(String groupId, String setlistId) {    return _items(groupId, setlistId)
         .orderBy('position')
         .snapshots()
         .map((s) => s.docs.map(SetlistSong.fromDoc).toList());

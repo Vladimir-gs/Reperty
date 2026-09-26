@@ -45,6 +45,29 @@ class Group {
       };
 }
 
+/// Roles administrativos del grupo.
+abstract final class GroupRoles {
+  static const owner = 'owner';
+  static const supervisor = 'supervisor';
+  static const member = 'member';
+
+  /// Etiqueta en español para mostrar.
+  static String label(String role) {
+    switch (role) {
+      case owner:
+        return 'Dueño';
+      case supervisor:
+      case 'admin': // compatibilidad con datos anteriores
+        return 'Supervisor';
+      default:
+        return 'Miembro';
+    }
+  }
+
+  /// Solo dueño y supervisores gestionan (setlists, miembros, ajustes).
+  static bool isManager(String role) =>
+      role == owner || role == supervisor || role == 'admin';
+}
 /// Membresía: rol administrativo + funciones musicales.
 class GroupMember {
   const GroupMember({
@@ -64,6 +87,8 @@ class GroupMember {
   final String? photoUrl;
 
   bool get isVocalist => musicalRoles.contains('vocalist');
+  bool get isManager => GroupRoles.isManager(role);
+  String get roleLabel => GroupRoles.label(role);
 
   factory GroupMember.fromDoc(DocumentSnapshot<Map<String, dynamic>> doc) {
     final m = doc.data() ?? {};

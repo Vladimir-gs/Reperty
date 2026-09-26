@@ -20,10 +20,43 @@ final myGroupsProvider = StreamProvider<List<Group>>((ref) {
 /// Grupo seleccionado actualmente (persiste solo en memoria por sesión).
 final selectedGroupProvider = StateProvider<Group?>((ref) => null);
 
+/// Grupo efectivo: la selección manual, o automático cuando el usuario
+/// pertenece a un solo grupo. Si hay varios y ninguno elegido → null.
+final currentGroupProvider = Provider<Group?>((ref) {
+  final selected = ref.watch(selectedGroupProvider);
+  if (selected != null) return selected;
+  final groups = ref.watch(myGroupsProvider).valueOrNull ?? [];
+  if (groups.length == 1) return groups.first;
+  return null;
+});
+
 /// Miembros del grupo seleccionado.
 final groupMembersProvider =
     StreamProvider.autoDispose.family<List<GroupMember>, String>((ref, groupId) {
   return ref.watch(groupsRepositoryProvider).watchMembers(groupId);
+});
+
+/// Rol propio en el grupo (null si no es miembro).
+final myRoleProvider =
+    StreamProvider.autoDispose.family<String?, String>((ref, groupId) {
+  final uid = ref.watch(authStateProvider).valueOrNull?.uid;
+  if (uid == null) return Stream.value(null);
+  return ref
+      .watch(groupsRepositoryProvider)
+      .watchMembers(groupId)
+      .map((list) {
+    for (final m in list) {
+      if (m.userId == uid) return m.role;
+    }
+    return null;
+  });
+});
+
+/// true si soy dueño o supervisor del grupo.
+final amManagerProvider =
+    Provider.autoDispose.family<bool, String>((ref, groupId) {
+  final role = ref.watch(myRoleProvider(groupId)).valueOrNull;
+  return role != null && GroupRoles.isManager(role);
 });
 
 class GroupsRepository {
@@ -37,6 +70,10 @@ class GroupsRepository {
   /// Grupos del usuario desde su índice propio (users/{uid}/groups).
   /// Evita collectionGroup queries, que las reglas rechazarían por
   /// incluir membresías de otros usuarios.
+  ///
+  /// Cada documento se lee de forma tolerante: si la membresía aún no se
+  /// propagó en el servidor (típico justo después de unirse), se reintenta
+  /// con espera en vez de romper todo el stream con permission-denied.
   Stream<List<Group>> watchMyGroups(String uid) {
     return _db
         .collection('users')
@@ -47,13 +84,30 @@ class GroupsRepository {
       final groups = <Group>[];
       for (final m in snap.docs) {
         final groupId = (m.data()['groupId'] as String?) ?? m.id;
-        final g = await _groups.doc(groupId).get(
-              const GetOptions(source: Source.serverAndCache),
-            );
-        if (g.exists) groups.add(Group.fromDoc(g));
+        final g = await _fetchGroupResilient(groupId);
+        if (g != null) groups.add(g);
       }
       return groups;
     });
+  }
+
+  Future<Group?> _fetchGroupResilient(String groupId) async {
+    for (var attempt = 0; attempt < 3; attempt++) {
+      try {
+        final g = await _groups.doc(groupId).get();
+        if (g.exists) return Group.fromDoc(g);
+        return null;
+      } on FirebaseException catch (e) {
+        // permission-denied transitorio: la membresía puede no haberse
+        // propagado aún. Reintenta; si persiste, omite sin romper el stream.
+        if (e.code == 'permission-denied' && attempt < 2) {
+          await Future.delayed(Duration(seconds: 2 * (attempt + 1)));
+          continue;
+        }
+        return null;
+      }
+    }
+    return null;
   }
 
   Stream<List<GroupMember>> watchMembers(String groupId) {
@@ -72,6 +126,7 @@ class GroupsRepository {
     String description = '',
     required String createdBy,
     String? displayName,
+    String? photoUrl,
   }) async {
     final ref = _groups.doc();
     final now = DateTime.now();
@@ -100,10 +155,11 @@ class GroupsRepository {
       ref.collection('members').doc(createdBy),
       GroupMember(
         userId: createdBy,
-        role: 'owner',
+        role: GroupRoles.owner,
         musicalRoles: const [],
         joinedAt: now,
         displayName: displayName,
+        photoUrl: photoUrl,
       ).toMap(),
     );
     batch.set(
@@ -127,6 +183,7 @@ class GroupsRepository {
     required String code,
     required String uid,
     String? displayName,
+    String? photoUrl,
   }) async {
     final normalized = code.trim().toUpperCase();
     final codeDoc =
@@ -140,10 +197,11 @@ class GroupsRepository {
       _groups.doc(groupId).collection('members').doc(uid),
       GroupMember(
         userId: uid,
-        role: 'member',
+        role: GroupRoles.member,
         musicalRoles: const [],
         joinedAt: now,
         displayName: displayName,
+        photoUrl: photoUrl,
       ).toMap(),
       SetOptions(merge: true),
     );
@@ -159,9 +217,9 @@ class GroupsRepository {
       SetOptions(merge: true),
     );
     await batch.commit();
-    final g = await _groups.doc(groupId).get();
-    if (!g.exists) throw StateError('Grupo no encontrado');
-    return Group.fromDoc(g);
+    final g = await _fetchGroupResilient(groupId);
+    if (g == null) throw StateError('Grupo no encontrado');
+    return g;
   }
 
   Future<void> leaveGroup(String groupId, String uid) async {
@@ -182,7 +240,48 @@ class GroupsRepository {
         .update(member.toMap());
   }
 
+  /// Cambia el rol administrativo (solo managers; las reglas lo exigen).
+  Future<void> updateMemberRole({
+    required String groupId,
+    required String targetUid,
+    required String newRole,
+    required String actorUid,
+    required String actorRole,
+  }) async {
+    if (!GroupRoles.isManager(actorRole)) {
+      throw StateError('Sin permisos');
+    }
+    final target = await _groups
+        .doc(groupId)
+        .collection('members')
+        .doc(targetUid)
+        .get();
+    final current = (target.data()?['role'] as String?) ?? GroupRoles.member;
+    if (current == GroupRoles.owner && actorRole != GroupRoles.owner) {
+      throw StateError('Solo el dueño puede modificar al dueño');
+    }
+    if (targetUid == actorUid && current == GroupRoles.owner) {
+      throw StateError('El dueño no puede quitarse su propio rol');
+    }
+    await _groups
+        .doc(groupId)
+        .collection('members')
+        .doc(targetUid)
+        .update({'role': newRole});
+    await _db
+        .collection('users')
+        .doc(targetUid)
+        .collection('groups')
+        .doc(groupId)
+        .update({'role': newRole});
+  }
+
   Future<void> removeMember(String groupId, String uid) async {
-    await _groups.doc(groupId).collection('members').doc(uid).delete();
+    final batch = _db.batch();
+    batch.delete(_groups.doc(groupId).collection('members').doc(uid));
+    batch.delete(
+      _db.collection('users').doc(uid).collection('groups').doc(groupId),
+    );
+    await batch.commit();
   }
 }

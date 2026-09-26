@@ -1,7 +1,131 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../../core/theme/app_theme.dart';
+
+/// Item de la barra inferior de marca.
+class BrandTabItem {
+  const BrandTabItem({required this.icon, required this.label});
+
+  final IconData icon;
+  final String label;
+}
+
+/// Barra inferior flotante: pastilla redondeada, iconos compactos (22)
+/// y pestaña activa en degradado azul con háptico al cambiar.
+class BrandTabBar extends StatelessWidget {
+  const BrandTabBar({
+    super.key,
+    required this.items,
+    required this.currentIndex,
+    required this.onTap,
+  });
+
+  final List<BrandTabItem> items;
+  final int currentIndex;
+  final ValueChanged<int> onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    return SafeArea(
+      top: false,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(20, 0, 20, 12),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+          decoration: BoxDecoration(
+            color: Theme.of(context).cardColor,
+            borderRadius: BorderRadius.circular(28),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withAlpha(isDark ? 80 : 25),
+                blurRadius: 20,
+                offset: const Offset(0, 8),
+              ),
+            ],
+          ),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceAround,
+            children: [
+              for (var i = 0; i < items.length; i++)
+                _TabButton(
+                  item: items[i],
+                  active: i == currentIndex,
+                  onTap: () {
+                    HapticFeedback.selectionClick();
+                    onTap(i);
+                  },
+                ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _TabButton extends StatelessWidget {
+  const _TabButton({
+    required this.item,
+    required this.active,
+    required this.onTap,
+  });
+
+  final BrandTabItem item;
+  final bool active;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: onTap,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        padding: EdgeInsets.symmetric(
+          horizontal: active ? 14 : 10,
+          vertical: 8,
+        ),
+        decoration: BoxDecoration(
+          gradient: active ? AppTheme.brandGradientStrong : null,
+          borderRadius: BorderRadius.circular(20),
+          boxShadow: active
+              ? [
+                  BoxShadow(
+                    color: AppTheme.brandBlue.withAlpha(70),
+                    blurRadius: 10,
+                    offset: const Offset(0, 4),
+                  ),
+                ]
+              : null,
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              item.icon,
+              size: 21,
+              color: active ? CupertinoColors.white : AppTheme.iosGrey,
+            ),
+            if (active) ...[
+              const SizedBox(width: 6),
+              Text(
+                item.label,
+                style: const TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                  color: CupertinoColors.white,
+                ),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+}
 
 /// Título grande estilo iOS (Large Title 34) + subtítulo gris.
 class LargeTitle extends StatelessWidget {
@@ -69,6 +193,7 @@ class GroupedSection extends StatelessWidget {
         borderRadius: BorderRadius.circular(AppTheme.cardRadius),
       ),
       child: Column(
+        mainAxisSize: MainAxisSize.min,
         children: [
           for (var i = 0; i < children.length; i++) ...[
             children[i],
@@ -166,7 +291,7 @@ class AppleSearchField extends StatelessWidget {
   }
 }
 
-/// Botón primario iOS: ancho completo, alto 52, radio 14.
+/// Botón primario: degradado azul de marca, ancho completo, alto 52.
 class PrimaryButton extends StatelessWidget {
   const PrimaryButton({
     super.key,
@@ -183,16 +308,122 @@ class PrimaryButton extends StatelessWidget {
   Widget build(BuildContext context) {
     return SizedBox(
       width: double.infinity,
-      child: CupertinoButton.filled(
-        borderRadius: BorderRadius.circular(AppTheme.cardRadius),
-        onPressed: loading ? null : onPressed,
-        child: loading
-            ? const SizedBox(
-                height: 20,
-                width: 20,
-                child: CupertinoActivityIndicator(color: CupertinoColors.white),
-              )
-            : Text(label, style: const TextStyle(fontSize: 17)),
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          gradient: onPressed == null && !loading
+              ? null
+              : AppTheme.brandGradient,
+          color: onPressed == null && !loading ? AppTheme.iosGrey : null,
+          borderRadius: BorderRadius.circular(AppTheme.cardRadius),
+          boxShadow: [
+            BoxShadow(
+              color: AppTheme.brandBlue.withAlpha(70),
+              blurRadius: 16,
+              offset: const Offset(0, 6),
+            ),
+          ],
+        ),
+        child: CupertinoButton(
+          borderRadius: BorderRadius.circular(AppTheme.cardRadius),
+          onPressed: loading ? null : onPressed,
+          child: loading
+              ? const SizedBox(
+                  height: 20,
+                  width: 20,
+                  child: CupertinoActivityIndicator(
+                    color: CupertinoColors.white,
+                  ),
+                )
+              : Text(
+                  label,
+                  style: const TextStyle(
+                    fontSize: 17,
+                    fontWeight: FontWeight.w600,
+                    color: CupertinoColors.white,
+                  ),
+                ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Fondo nocturno con resplandores azules (pantallas de marca).
+class BrandNight extends StatelessWidget {
+  const BrandNight({super.key, required this.child});
+
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: AppTheme.brandNight,
+      body: Stack(
+        children: [
+          const Positioned.fill(
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                gradient: RadialGradient(
+                  center: Alignment(0.1, -0.5),
+                  radius: 1.1,
+                  colors: [Color(0xFF1D4ED8), Color(0x00000000)],
+                ),
+              ),
+            ),
+          ),
+          const Positioned.fill(
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                gradient: RadialGradient(
+                  center: Alignment(-0.1, 1.1),
+                  radius: 1.0,
+                  colors: [Color(0xFF0A2540), Color(0x00000000)],
+                ),
+              ),
+            ),
+          ),
+          SafeArea(child: child),
+        ],
+      ),
+    );
+  }
+}
+
+/// Tarjeta héroe con degradado azul de marca y texto blanco.
+class HeroCard extends StatelessWidget {
+  const HeroCard({
+    super.key,
+    required this.children,
+    this.onTap,
+    this.gradient = AppTheme.brandGradientStrong,
+  });
+
+  final List<Widget> children;
+  final VoidCallback? onTap;
+  final Gradient gradient;
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      borderRadius: BorderRadius.circular(20),
+      onTap: onTap,
+      child: Ink(
+        padding: const EdgeInsets.all(24),
+        decoration: BoxDecoration(
+          gradient: gradient,
+          borderRadius: BorderRadius.circular(20),
+          boxShadow: [
+            BoxShadow(
+              color: AppTheme.brandBlue.withAlpha(60),
+              blurRadius: 20,
+              offset: const Offset(0, 8),
+            ),
+          ],
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: children,
+        ),
       ),
     );
   }

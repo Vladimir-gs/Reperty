@@ -22,3 +22,7 @@ firebase-debug.log
 # Misc
 .DS_Store
 Thumbs.db
+
+# Skills locales (no versionar)
+.agents/
+skills-lock.json

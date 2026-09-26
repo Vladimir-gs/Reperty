@@ -62,122 +62,158 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      body: SafeArea(
-        child: Center(
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 420),
-            child: ListView(
-              shrinkWrap: true,
-              padding: const EdgeInsets.all(AppTheme.screenPadding + 8),
-              children: [
-                const SizedBox(height: 32),
-                Container(
-                  width: 88,
-                  height: 88,
-                  decoration: BoxDecoration(
-                    color: AppTheme.iosBlue,
-                    borderRadius: BorderRadius.circular(22),
-                  ),
-                  child: const Icon(
-                    CupertinoIcons.music_note_2,
-                    size: 44,
-                    color: CupertinoColors.white,
-                  ),
-                ),
-                const SizedBox(height: 24),
-                Text(
-                  'Reperty',
-                  style: Theme.of(context).textTheme.displayLarge,
-                ),
-                const SizedBox(height: 6),
-                Text(
-                  'El repertorio de tu grupo,\nsiempre contigo.',
-                  style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                        color: AppTheme.iosGrey,
-                      ),
-                ),
-                const SizedBox(height: 36),
-                PrimaryButton(
-                  label: 'Continuar con Google',
-                  loading: _googleBusy,
-                  onPressed: _google,
-                ),
-                const SizedBox(height: 28),
-                Row(
-                  children: [
-                    const Expanded(child: Divider()),
-                    Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 12),
-                      child: Text(
-                        'o con email',
-                        style: Theme.of(context).textTheme.bodySmall,
-                      ),
+    return BrandNight(
+      child: Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 420),
+          child: ListView(
+            shrinkWrap: true,
+            padding: const EdgeInsets.all(AppTheme.screenPadding + 8),
+            children: [
+              const SizedBox(height: 40),
+              Container(
+                width: 88,
+                height: 88,
+                decoration: BoxDecoration(
+                  gradient: AppTheme.brandGradient,
+                  borderRadius: BorderRadius.circular(22),
+                  boxShadow: [
+                    BoxShadow(
+                      color: AppTheme.brandBlue.withAlpha(90),
+                      blurRadius: 24,
+                      offset: const Offset(0, 8),
                     ),
-                    const Expanded(child: Divider()),
                   ],
                 ),
-                const SizedBox(height: 20),
-                Form(
-                  key: _form,
-                  child: Column(
-                    children: [
-                      CupertinoTextField(
-                        controller: _email,
-                        placeholder: 'Email',
-                        keyboardType: TextInputType.emailAddress,
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 16,
-                          vertical: 16,
-                        ),
-                        decoration: BoxDecoration(
-                          color: Theme.of(context).cardColor,
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                      ),
-                      const SizedBox(height: 12),
-                      CupertinoTextField(
-                        controller: _password,
-                        placeholder: 'Contraseña',
-                        obscureText: true,
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 16,
-                          vertical: 16,
-                        ),
-                        decoration: BoxDecoration(
-                          color: Theme.of(context).cardColor,
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                      ),
-                    ],
-                  ),
+                child: const Icon(
+                  CupertinoIcons.music_note_2,
+                  size: 44,
+                  color: CupertinoColors.white,
                 ),
-                if (_error != null) ...[
-                  const SizedBox(height: 12),
-                  Text(
-                    _error!,
-                    style: const TextStyle(
-                      color: CupertinoColors.systemRed,
-                      fontSize: 13,
+              ),
+              const SizedBox(height: 28),
+              const Text(
+                'Reperty',
+                style: TextStyle(
+                  fontSize: 40,
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: -0.5,
+                  color: CupertinoColors.white,
+                ),
+              ),
+              const SizedBox(height: 6),
+              const Text(
+                'El repertorio de tu grupo,\nsiempre contigo.',
+                style: TextStyle(fontSize: 17, color: AppTheme.iosGrey),
+              ),
+              const SizedBox(height: 40),
+              PrimaryButton(
+                label: 'Continuar con Google',
+                loading: _googleBusy,
+                onPressed: _google,
+              ),
+              const SizedBox(height: 28),
+              const Row(
+                children: [
+                  Expanded(
+                    child: Divider(color: Color(0xFF38383A)),
+                  ),
+                  Padding(
+                    padding: EdgeInsets.symmetric(horizontal: 12),
+                    child: Text(
+                      'o con email',
+                      style: TextStyle(
+                        fontSize: 13,
+                        color: AppTheme.iosGrey,
+                      ),
                     ),
                   ),
+                  Expanded(
+                    child: Divider(color: Color(0xFF38383A)),
+                  ),
                 ],
-                const SizedBox(height: 16),
-                CupertinoButton(
-                  onPressed: _busy ? null : _submit,
-                  child: _busy
-                      ? const CupertinoActivityIndicator()
-                      : const Text('Entrar', style: TextStyle(fontSize: 17)),
+              ),
+              const SizedBox(height: 20),
+              Form(
+                key: _form,
+                child: Column(
+                  children: [
+                    _DarkField(controller: _email, placeholder: 'Email'),
+                    const SizedBox(height: 12),
+                    _DarkField(
+                      controller: _password,
+                      placeholder: 'Contraseña',
+                      obscure: true,
+                    ),
+                  ],
                 ),
-                SecondaryButton(
-                  label: 'Crear cuenta',
-                  onPressed: () => context.go('/register'),
+              ),
+              if (_error != null) ...[
+                const SizedBox(height: 12),
+                Text(
+                  _error!,
+                  style: const TextStyle(
+                    color: CupertinoColors.systemRed,
+                    fontSize: 13,
+                  ),
                 ),
-                const SizedBox(height: 32),
               ],
-            ),
+              const SizedBox(height: 8),
+              CupertinoButton(
+                onPressed: _busy ? null : _submit,
+                child: _busy
+                    ? const CupertinoActivityIndicator()
+                    : const Text(
+                        'Entrar',
+                        style: TextStyle(
+                          fontSize: 17,
+                          color: CupertinoColors.white,
+                        ),
+                      ),
+              ),
+              CupertinoButton(
+                onPressed: () => context.go('/register'),
+                child: const Text(
+                  'Crear cuenta',
+                  style: TextStyle(
+                    fontSize: 15,
+                    color: AppTheme.iosGrey,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 32),
+            ],
           ),
         ),
+      ),
+    );
+  }
+}
+
+class _DarkField extends StatelessWidget {
+  const _DarkField({
+    required this.controller,
+    required this.placeholder,
+    this.obscure = false,
+  });
+
+  final TextEditingController controller;
+  final String placeholder;
+  final bool obscure;
+
+  @override
+  Widget build(BuildContext context) {
+    return CupertinoTextField(
+      controller: controller,
+      placeholder: placeholder,
+      obscureText: obscure,
+      style: const TextStyle(color: CupertinoColors.white, fontSize: 17),
+      placeholderStyle: const TextStyle(color: AppTheme.iosGrey),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+      decoration: BoxDecoration(
+        color: AppTheme.cardDark.withAlpha(200),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: const Color(0xFF38383A)),
       ),
     );
   }

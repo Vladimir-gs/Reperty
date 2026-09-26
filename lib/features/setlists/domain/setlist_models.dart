@@ -46,6 +46,33 @@ class Setlist {
       };
 }
 
+/// Estado del setlist según su fecha.
+///
+/// - El setlist se cierra al final del día siguiente a su fecha.
+/// - El día del cierre se muestra opaco (ya pasó el evento).
+/// - Después, solo aparece en el Historial.
+enum SetlistStatus { upcoming, closing, closed }
+
+extension SetlistStatusX on Setlist {
+  DateTime _dayOnly(DateTime d) => DateTime(d.year, d.month, d.day);
+
+  /// Día en que se cierra = fecha + 1 día.
+  DateTime? get closingDay =>
+      date == null ? null : _dayOnly(date!).add(const Duration(days: 1));
+
+  SetlistStatus get status {
+    if (date == null) return SetlistStatus.upcoming;
+    final today = _dayOnly(DateTime.now());
+    final close = closingDay!;
+    if (today.isAtSameMomentAs(close)) return SetlistStatus.closing;
+    if (today.isAfter(close)) return SetlistStatus.closed;
+    return SetlistStatus.upcoming;
+  }
+
+  bool get isClosed => status == SetlistStatus.closed;
+  bool get isClosing => status == SetlistStatus.closing;
+}
+
 /// Canción dentro de un setlist.
 ///
 /// - [singerId]: vocalista asignado (nullable).

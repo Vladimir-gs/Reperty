@@ -19,11 +19,11 @@ final authStateProvider = StreamProvider<User?>((ref) {
   return ref.watch(authRepositoryProvider).authStateChanges();
 });
 
-/// Perfil Firestore del usuario actual.
+/// Perfil Firestore del usuario actual (se auto-crea si falta).
 final currentProfileProvider = StreamProvider<AppUser?>((ref) {
   final user = ref.watch(authStateProvider).valueOrNull;
   if (user == null) return Stream.value(null);
-  return ref.watch(authRepositoryProvider).watchProfile(user.uid);
+  return ref.watch(authRepositoryProvider).watchProfileEnsured(user);
 });
 
 class AuthRepository {
@@ -45,6 +45,38 @@ class AuthRepository {
               ? AppUser.fromMap(d.id, d.data()!)
               : null,
         );
+  }
+
+  /// Observa el perfil garantizando que el documento exista.
+  /// Si falta (p. ej. se creó la cuenta sin red), lo crea desde Firebase Auth.
+  Stream<AppUser?> watchProfileEnsured(User user) async* {
+    await ensureProfile(user);
+    yield* watchProfile(user.uid);
+  }
+
+  Future<void> ensureProfile(User user, {String? name}) async {
+    final doc = _users.doc(user.uid);
+    final now = DateTime.now();
+    try {
+      final existing = await doc.get();
+      await doc.set(
+        AppUser(
+          id: user.uid,
+          name: name ??
+              (existing.data()?['name'] as String?) ??
+              user.displayName ??
+              user.email?.split('@').first ??
+              'Músico',
+          email: user.email ?? (existing.data()?['email'] as String?) ?? '',
+          photoUrl: user.photoURL ?? existing.data()?['photoUrl'] as String?,
+          createdAt: (existing.data()?['createdAt'] as Timestamp?)?.toDate() ?? now,
+          updatedAt: now,
+        ).toMap(),
+        SetOptions(merge: true),
+      );
+    } on FirebaseException {
+      // Sin conexión: se reintentará al reabrir el perfil.
+    }
   }
 
   Future<void> _upsertProfile(User user, {String? name}) async {
@@ -72,12 +104,45 @@ class AuthRepository {
     }
   }
 
+  /// Propaga nombre/foto actuales a mis membresías de grupo,
+  /// para que los avatares se vean en todos lados.
+  Future<void> syncMemberPresence(User user) async {
+    try {
+      final index =
+          await _db.collection('users').doc(user.uid).collection('groups').get();
+      final batch = _db.batch();
+      var count = 0;
+      for (final doc in index.docs) {
+        final groupId = (doc.data()['groupId'] as String?) ?? doc.id;
+        batch.set(
+          _db
+              .collection('groups')
+              .doc(groupId)
+              .collection('members')
+              .doc(user.uid),
+          {
+            'displayName': user.displayName ??
+                user.email?.split('@').first ??
+                'Músico',
+            'photoUrl': user.photoURL,
+          },
+          SetOptions(merge: true),
+        );
+        count++;
+      }
+      if (count > 0) await batch.commit();
+    } on FirebaseException {
+      // No bloquear el login por esto.
+    }
+  }
+
   Future<User> signIn(String email, String password) async {
     final cred = await _auth.signInWithEmailAndPassword(
       email: email.trim(),
       password: password,
     );
     await _upsertProfile(cred.user!);
+    await syncMemberPresence(cred.user!);
     return cred.user!;
   }
 
@@ -88,6 +153,7 @@ class AuthRepository {
     );
     await cred.user!.updateDisplayName(name.trim());
     await _upsertProfile(cred.user!, name: name.trim());
+    await syncMemberPresence(cred.user!);
     return cred.user!;
   }
 
@@ -101,6 +167,7 @@ class AuthRepository {
     );
     final result = await _auth.signInWithCredential(cred);
     await _upsertProfile(result.user!);
+    await syncMemberPresence(result.user!);
     return result.user;
   }
 

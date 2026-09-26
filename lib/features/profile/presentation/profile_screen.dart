@@ -4,14 +4,17 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../shared/widgets/common_widgets.dart';
 import '../../auth/data/auth_repository.dart';
+import '../../groups/data/groups_repository.dart';
 
-/// Perfil del usuario actual + cerrar sesión.
+/// Perfil: cuenta, mis grupos y cerrar sesión.
 class ProfileScreen extends ConsumerWidget {
   const ProfileScreen({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final profile = ref.watch(currentProfileProvider);
+    final myGroups = ref.watch(myGroupsProvider);
+    final current = ref.watch(currentGroupProvider);
     return Scaffold(
       body: SafeArea(
         child: profile.when(
@@ -69,10 +72,46 @@ class ProfileScreen extends ConsumerWidget {
                     AppleRow(
                       title: 'Email',
                       trailing: Text(
-                        user.email,
+                        user.email.isEmpty ? '—' : user.email,
                         style: Theme.of(context).textTheme.bodySmall,
                       ),
                     ),
+                  ],
+                ),
+                const SectionTitle(title: 'Mis grupos'),
+                myGroups.when(
+                  loading: () => const LoadingView(),
+                  error: (e, _) => Text('Error: $e'),
+                  data: (list) {
+                    if (list.isEmpty) {
+                      return Text(
+                        'Aún no perteneces a ningún grupo.',
+                        style: Theme.of(context).textTheme.bodySmall,
+                      );
+                    }
+                    return GroupedSection(
+                      children: [
+                        for (final g in list)
+                          AppleRow(
+                            title: g.name,
+                            subtitle: 'Código ${g.code}',
+                            trailing: current?.id == g.id
+                                ? const Icon(
+                                    CupertinoIcons.check_mark,
+                                    color: CupertinoColors.activeBlue,
+                                  )
+                                : null,
+                            onTap: () => ref
+                                .read(selectedGroupProvider.notifier)
+                                .state = g,
+                          ),
+                      ],
+                    );
+                  },
+                ),
+                const SizedBox(height: 32),
+                GroupedSection(
+                  children: [
                     AppleRow(
                       title: 'Cerrar sesión',
                       onTap: () =>
@@ -80,7 +119,7 @@ class ProfileScreen extends ConsumerWidget {
                     ),
                   ],
                 ),
-                const SizedBox(height: 8),
+                const SizedBox(height: 16),
                 Center(
                   child: Text(
                     'Reperty · v0.1.0',

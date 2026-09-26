@@ -15,8 +15,12 @@ service cloud.firestore {
       return get(/databases/$(database)/documents/groups/$(groupId)/members/$(request.auth.uid)).data.role;
     }
 
+    function isManager(groupId) {
+      return isMember(groupId) && memberRole(groupId) in ['owner', 'admin', 'supervisor'];
+    }
+
     function isOwnerOrAdmin(groupId) {
-      return isMember(groupId) && memberRole(groupId) in ['owner', 'admin'];
+      return isManager(groupId);
     }
 
     // ---------- Users ----------
@@ -62,10 +66,13 @@ service cloud.firestore {
       match /members/{memberId} {
         allow read: if isMember(groupId);
         allow create: if signedIn() &&
-          (request.auth.uid == memberId || isOwnerOrAdmin(groupId));
-        allow update: if isOwnerOrAdmin(groupId) ||
-          (signedIn() && request.auth.uid == memberId);
-        allow delete: if isOwnerOrAdmin(groupId) ||
+          (request.auth.uid == memberId || isManager(groupId));
+        // Managers gestionan roles y eliminan. El propio usuario puede
+        // actualizar sus datos, pero no cambiarse el rol a sí mismo.
+        allow update: if isManager(groupId) ||
+          (signedIn() && request.auth.uid == memberId &&
+            request.resource.data.role == resource.data.role);
+        allow delete: if isManager(groupId) ||
           (signedIn() && request.auth.uid == memberId);
       }
 
@@ -83,13 +90,12 @@ service cloud.firestore {
 
       match /setlists/{setlistId} {
         allow read: if isMember(groupId);
-        allow create, update: if isMember(groupId);
-        allow delete: if isOwnerOrAdmin(groupId);
+        // Solo dueño y supervisores crean/editan/eliminan setlists.
+        allow create, update, delete: if isManager(groupId);
 
         match /items/{itemId} {
           allow read: if isMember(groupId);
-          allow create, update: if isMember(groupId);
-          allow delete: if isMember(groupId);
+          allow create, update, delete: if isManager(groupId);
         }
       }
     }

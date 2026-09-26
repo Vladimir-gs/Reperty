@@ -14,6 +14,7 @@ import '../features/setlists/presentation/setlist_detail_screen.dart';
 import '../features/setlists/presentation/setlists_screen.dart';
 import '../features/songs/presentation/song_detail_screen.dart';
 import '../features/songs/presentation/songs_screen.dart';
+import '../shared/widgets/common_widgets.dart';
 
 final appRouterProvider = Provider<GoRouter>((ref) {
   final authState = ref.watch(authStateProvider);
@@ -105,44 +106,31 @@ final appRouterProvider = Provider<GoRouter>((ref) {
   );
 });
 
-/// Tab Bar estilo iOS.
+/// Barra inferior flotante de marca.
 class ScaffoldWithNav extends StatelessWidget {
   const ScaffoldWithNav({super.key, required this.shell});
 
   final StatefulNavigationShell shell;
 
+  static const _tabs = [
+    BrandTabItem(icon: CupertinoIcons.house_fill, label: 'Inicio'),
+    BrandTabItem(icon: CupertinoIcons.music_note_2, label: 'Cantos'),
+    BrandTabItem(icon: CupertinoIcons.list_bullet, label: 'Setlists'),
+    BrandTabItem(icon: CupertinoIcons.person_2_fill, label: 'Grupo'),
+    BrandTabItem(icon: CupertinoIcons.person_fill, label: 'Perfil'),
+  ];
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       body: shell,
-      bottomNavigationBar: CupertinoTabBar(
+      bottomNavigationBar: BrandTabBar(
+        items: _tabs,
         currentIndex: shell.currentIndex,
         onTap: (i) => shell.goBranch(
           i,
           initialLocation: i == shell.currentIndex,
         ),
-        items: const [
-          BottomNavigationBarItem(
-            icon: Icon(CupertinoIcons.house),
-            label: 'Inicio',
-          ),
-          BottomNavigationBarItem(
-            icon: Icon(CupertinoIcons.music_note),
-            label: 'Cantos',
-          ),
-          BottomNavigationBarItem(
-            icon: Icon(CupertinoIcons.list_bullet),
-            label: 'Setlists',
-          ),
-          BottomNavigationBarItem(
-            icon: Icon(CupertinoIcons.group),
-            label: 'Grupo',
-          ),
-          BottomNavigationBarItem(
-            icon: Icon(CupertinoIcons.person),
-            label: 'Perfil',
-          ),
-        ],
       ),
     );
   }

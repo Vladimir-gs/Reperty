@@ -16,6 +16,31 @@ abstract final class AppTheme {
   static const groupedLight = Color(0xFFF2F2F7);
   static const cardDark = Color(0xFF1C1C1E);
 
+  /// Identidad de marca: azul característico en degradado.
+  /// Inspirado en referencias: botón degradado + glow azul sobre oscuro.
+  static const brandDeep = Color(0xFF0A2540);
+  static const brandBlue = Color(0xFF2E7CF6);
+  static const brandLight = Color(0xFF7FB2FF);
+  static const brandNight = Color(0xFF050810);
+
+  static const brandGradient = LinearGradient(
+    begin: Alignment.topLeft,
+    end: Alignment.bottomRight,
+    colors: [brandLight, brandBlue],
+  );
+
+  static const brandGradientStrong = LinearGradient(
+    begin: Alignment.topLeft,
+    end: Alignment.bottomRight,
+    colors: [brandBlue, Color(0xFF1D4ED8)],
+  );
+
+  static const nightGlow = RadialGradient(
+    center: Alignment(0, -0.4),
+    radius: 0.9,
+    colors: [Color(0xFF1D4ED8), Color(0x00000000)],
+  );
+
   static const double screenPadding = 20;
   static const double sectionGap = 32;
   static const double cardRadius = 14;

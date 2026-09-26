@@ -32,7 +32,15 @@ class GroupsScreen extends ConsumerWidget {
               Expanded(
                 child: groups.when(
                   loading: () => const LoadingView(),
-                  error: (e, _) => Center(child: Text('Error: $e')),
+                  error: (_, __) => EmptyState(
+                    icon: CupertinoIcons.exclamationmark_circle,
+                    title:
+                        'No se pudieron cargar tus grupos.\nRevisa tu conexión.',
+                    action: PrimaryButton(
+                      label: 'Reintentar',
+                      onPressed: () => ref.invalidate(myGroupsProvider),
+                    ),
+                  ),
                   data: (list) {
                     if (list.isEmpty) {
                       return EmptyState(
@@ -45,8 +53,9 @@ class GroupsScreen extends ConsumerWidget {
                         ),
                       );
                     }
-                    return GroupedSection(
-                      children: [
+                    return SingleChildScrollView(
+                      child: GroupedSection(
+                        children: [
                         for (final g in list)
                           AppleRow(
                             leading: Container(
@@ -78,7 +87,8 @@ class GroupsScreen extends ConsumerWidget {
                               context.go('/group');
                             },
                           ),
-                      ],
+                        ],
+                      ),
                     );
                   },
                 ),
@@ -165,6 +175,7 @@ class GroupsScreen extends ConsumerWidget {
                       description: desc.text,
                       createdBy: user.uid,
                       displayName: user.displayName,
+                      photoUrl: user.photoURL,
                     );
                 ref.read(selectedGroupProvider.notifier).state = group;
                 if (ctx.mounted) Navigator.pop(ctx);
@@ -221,6 +232,7 @@ class GroupsScreen extends ConsumerWidget {
                       code: code.text,
                       uid: user.uid,
                       displayName: user.displayName,
+                      photoUrl: user.photoURL,
                     );
                 ref.read(selectedGroupProvider.notifier).state = group;
                 if (ctx.mounted) Navigator.pop(ctx);

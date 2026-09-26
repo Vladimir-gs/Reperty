@@ -15,7 +15,7 @@ class SongDetailScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final group = ref.watch(selectedGroupProvider);
+    final group = ref.watch(currentGroupProvider);
     if (group == null) {
       return const Scaffold(body: LoadingView());
     }
@@ -104,12 +104,17 @@ class SongDetailScreen extends ConsumerWidget {
                               leading: CircleAvatar(
                                 backgroundColor:
                                     CupertinoColors.systemGrey5,
-                                child: Text(
-                                  (m.displayName ?? '?').isEmpty
-                                      ? '?'
-                                      : (m.displayName ?? '?')[0]
-                                          .toUpperCase(),
-                                ),
+                                backgroundImage: m.photoUrl != null
+                                    ? NetworkImage(m.photoUrl!)
+                                    : null,
+                                child: m.photoUrl == null
+                                    ? Text(
+                                        ((m.displayName ?? '?').isEmpty
+                                                ? '?'
+                                                : (m.displayName ?? '?')[0])
+                                            .toUpperCase(),
+                                      )
+                                    : null,
                               ),
                               title: m.displayName ?? m.userId,
                               trailing: KeyBadge(

@@ -1,6 +1,7 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../../core/theme/app_theme.dart';
 import '../../../core/utils/musical_key.dart';
@@ -8,8 +9,11 @@ import '../../../shared/widgets/common_widgets.dart';
 import '../../groups/data/groups_repository.dart';
 import '../../songs/data/songs_repository.dart';
 import '../data/setlists_repository.dart';
+import '../domain/setlist_models.dart';
+import 'setlists_screen.dart' show MiniCalendar;
 
 /// Detalle del setlist: orden táctil, vocalista y tono por servicio.
+/// Solo managers editan; los setlists cerrados son solo lectura.
 class SetlistDetailScreen extends ConsumerWidget {
   const SetlistDetailScreen({super.key, required this.setlistId});
 
@@ -17,102 +21,79 @@ class SetlistDetailScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final group = ref.watch(selectedGroupProvider);
+    final group = ref.watch(currentGroupProvider);
     if (group == null) {
       return const Scaffold(body: LoadingView());
     }
+    final setlistAsync = ref.watch(
+      setlistProvider((groupId: group.id, setlistId: setlistId)),
+    );
     final items = ref.watch(
       setlistItemsProvider((groupId: group.id, setlistId: setlistId)),
     );
+    final isManager = ref.watch(amManagerProvider(group.id));
+    final setlist = setlistAsync.valueOrNull;
+    final closed = setlist?.isClosed ?? false;
+    final canEdit = isManager && !closed;
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Setlist'),
+        title: Text(setlist?.name ?? 'Setlist'),
         actions: [
-          CupertinoButton(
-            padding: const EdgeInsets.symmetric(horizontal: 16),
-            onPressed: () => _showAddSong(context, ref, group.id, setlistId),
-            child: const Icon(CupertinoIcons.add),
-          ),
+          if (isManager)
+            CupertinoButton(
+              padding: const EdgeInsets.symmetric(horizontal: 8),
+              onPressed: setlist == null
+                  ? null
+                  : () =>
+                      _showEditSetlist(context, ref, group.id, setlist),
+              child: const Icon(CupertinoIcons.pencil, size: 22),
+            ),
+          if (canEdit)
+            CupertinoButton(
+              padding: const EdgeInsets.only(right: 12),
+              onPressed: () =>
+                  _showAddSong(context, ref, group.id, setlistId),
+              child: const Icon(CupertinoIcons.add),
+            ),
         ],
       ),
-      body: items.when(
+      body: setlistAsync.when(
         loading: () => const LoadingView(),
         error: (e, _) => Center(child: Text('Error: $e')),
-        data: (list) {
-          if (list.isEmpty) {
-            return EmptyState(
+        data: (s) {
+          if (s == null) {
+            return const EmptyState(
               icon: CupertinoIcons.list_bullet,
-              title: 'Setlist vacío.\nAgrega cantos del repertorio.',
-              action: PrimaryButton(
-                label: 'Agregar canto',
-                onPressed: () =>
-                    _showAddSong(context, ref, group.id, setlistId),
-              ),
+              title: 'Setlist no encontrado.',
             );
           }
-          return Column(
-            children: [
-              Padding(
-                padding: const EdgeInsets.fromLTRB(20, 8, 20, 12),
-                child: Text(
-                  'Mantén y arrastra para ordenar · toca para ajustar el tono',
-                  style: Theme.of(context).textTheme.bodySmall,
-                ),
+          return items.when(
+            loading: () => const LoadingView(),
+            error: (e, _) => Center(child: Text('Error: $e')),
+            data: (list) => _Body(
+              list: list,
+              closed: closed,
+              canEdit: canEdit,
+              isManager: isManager,
+              onAdd: () =>
+                  _showAddSong(context, ref, group.id, setlistId),
+              onEditItem: (item) => _showEditItem(
+                context,
+                ref,
+                group.id,
+                setlistId,
+                item.id,
+                item.overrideKey,
               ),
-              Expanded(
-                child: ReorderableListView.builder(
-                  padding: const EdgeInsets.symmetric(horizontal: 20),
-                  itemCount: list.length,
-                  onReorderItem: (oldIndex, newIndex) async {
-                    final ids = list.map((e) => e.id).toList();
-                    final moved = ids.removeAt(oldIndex);
-                    ids.insert(newIndex, moved);
-                    await ref.read(setlistsRepositoryProvider).reorder(
-                          groupId: group.id,
-                          setlistId: setlistId,
-                          orderedItemIds: ids,
-                        );
-                  },
-                  itemBuilder: (context, i) {
-                    final item = list[i];
-                    final key = item.effectiveKey ?? '—';
-                    final isOverride = item.overrideKey != null;
-                    return Container(
-                      key: ValueKey(item.id),
-                      margin: const EdgeInsets.only(bottom: 10),
-                      decoration: BoxDecoration(
-                        color: Theme.of(context).cardColor,
-                        borderRadius: BorderRadius.circular(
-                          AppTheme.cardRadius,
-                        ),
+              onReorder: (ids) =>
+                  ref.read(setlistsRepositoryProvider).reorder(
+                        groupId: group.id,
+                        setlistId: setlistId,
+                        orderedItemIds: ids,
                       ),
-                      child: AppleRow(
-                        leading: Text(
-                          (i + 1).toString().padLeft(2, '0'),
-                          style: const TextStyle(
-                            fontSize: 15,
-                            fontWeight: FontWeight.w600,
-                            color: AppTheme.iosGrey,
-                          ),
-                        ),
-                        title: item.titleSnapshot,
-                        subtitle:
-                            '${item.singerNameSnapshot ?? 'Sin vocalista'}${isOverride ? ' · tono de hoy' : ''}',
-                        trailing: KeyBadge(musicalKey: key),
-                        onTap: () => _showEditItem(
-                          context,
-                          ref,
-                          group.id,
-                          setlistId,
-                          item.id,
-                          item.overrideKey,
-                        ),
-                      ),
-                    );
-                  },
-                ),
-              ),
-            ],
+              onDelete: () =>
+                  _confirmDelete(context, ref, group.id, setlistId),
+            ),
           );
         },
       ),
@@ -149,7 +130,9 @@ class SetlistDetailScreen extends ConsumerWidget {
                 padding: EdgeInsets.zero,
                 onPressed: () => _choose(
                   ctx,
-                  options: [for (final s in songs) '${s.title} · ${s.originalKey}'],
+                  options: [
+                    for (final s in songs) '${s.title} · ${s.originalKey}',
+                  ],
                   initial: songIdx,
                   onPick: (i) => setDialogState(() => songIdx = i),
                 ),
@@ -324,6 +307,277 @@ class SetlistDetailScreen extends ConsumerWidget {
             const SizedBox(height: 16),
           ],
         ),
+      ),
+    );
+  }
+
+  void _showEditSetlist(
+    BuildContext context,
+    WidgetRef ref,
+    String groupId,
+    Setlist setlist,
+  ) {
+    final name = TextEditingController(text: setlist.name);
+    var day = setlist.date ?? DateTime.now();
+    showDialog<void>(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setDialogState) => AlertDialog(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(20),
+          ),
+          title: const Text('Editar setlist'),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TextField(
+                  controller: name,
+                  decoration: const InputDecoration(
+                    hintText: 'Nombre',
+                    border: OutlineInputBorder(),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                SizedBox(
+                  height: 340,
+                  width: 300,
+                  child: MiniCalendar(
+                    focusedDay: day,
+                    selectedDay: day,
+                    onSelect: (d) => setDialogState(() => day = d),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('Cancelar'),
+            ),
+            FilledButton(
+              onPressed: () async {
+                if (name.text.trim().isEmpty) return;
+                try {
+                  await ref.read(setlistsRepositoryProvider).updateSetlist(
+                        groupId: groupId,
+                        setlistId: setlist.id,
+                        name: name.text,
+                        date: day,
+                      );
+                  if (ctx.mounted) Navigator.pop(ctx);
+                } on Exception catch (e) {
+                  if (ctx.mounted) {
+                    Navigator.pop(ctx);
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content: Text('No se pudo guardar: $e')),
+                    );
+                  }
+                }
+              },
+              child: const Text('Guardar'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _confirmDelete(
+    BuildContext context,
+    WidgetRef ref,
+    String groupId,
+    String setlistId,
+  ) {
+    showCupertinoDialog<void>(
+      context: context,
+      builder: (ctx) => CupertinoAlertDialog(
+        title: const Text('Eliminar setlist'),
+        content: const Text('Se eliminará con todas sus canciones.'),
+        actions: [
+          CupertinoDialogAction(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cancelar'),
+          ),
+          CupertinoDialogAction(
+            isDestructiveAction: true,
+            onPressed: () async {
+              try {
+                await ref
+                    .read(setlistsRepositoryProvider)
+                    .deleteSetlist(groupId, setlistId);
+                if (ctx.mounted) Navigator.pop(ctx);
+                if (context.mounted) context.pop();
+              } on Exception catch (e) {
+                if (ctx.mounted) {
+                  Navigator.pop(ctx);
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text('No se pudo eliminar: $e')),
+                  );
+                }
+              }
+            },
+            child: const Text('Eliminar'),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Contenido del setlist: solo lectura si está cerrado o no soy manager.
+class _Body extends StatelessWidget {
+  const _Body({
+    required this.list,
+    required this.closed,
+    required this.canEdit,
+    required this.isManager,
+    required this.onAdd,
+    required this.onEditItem,
+    required this.onReorder,
+    required this.onDelete,
+  });
+
+  final List<SetlistSong> list;
+  final bool closed;
+  final bool canEdit;
+  final bool isManager;
+  final VoidCallback onAdd;
+  final ValueChanged<SetlistSong> onEditItem;
+  final ValueChanged<List<String>> onReorder;
+  final VoidCallback onDelete;
+
+  @override
+  Widget build(BuildContext context) {
+    if (list.isEmpty) {
+      return EmptyState(
+        icon: CupertinoIcons.list_bullet,
+        title: 'Setlist vacío.\nAgrega cantos del repertorio.',
+        action: canEdit
+            ? PrimaryButton(label: 'Agregar canto', onPressed: onAdd)
+            : null,
+      );
+    }
+    return Column(
+      children: [
+        if (closed)
+          Container(
+            margin: const EdgeInsets.fromLTRB(20, 8, 20, 0),
+            padding: const EdgeInsets.symmetric(
+              horizontal: 16,
+              vertical: 12,
+            ),
+            decoration: BoxDecoration(
+              color: Theme.of(context).cardColor,
+              borderRadius: BorderRadius.circular(AppTheme.cardRadius),
+            ),
+            child: Row(
+              children: [
+                const Icon(
+                  CupertinoIcons.archivebox,
+                  size: 20,
+                  color: AppTheme.iosGrey,
+                ),
+                const SizedBox(width: 8),
+                Text(
+                  'Setlist cerrado · solo lectura',
+                  style: Theme.of(context).textTheme.bodySmall,
+                ),
+              ],
+            ),
+          ),
+        if (canEdit)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(20, 8, 20, 12),
+            child: Text(
+              'Mantén y arrastra para ordenar · toca para ajustar el tono',
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
+          )
+        else
+          const SizedBox(height: 12),
+        Expanded(
+          child: canEdit
+              ? ReorderableListView.builder(
+                  padding: const EdgeInsets.symmetric(horizontal: 20),
+                  itemCount: list.length,
+                  onReorderItem: (oldIndex, newIndex) {
+                    final ids = list.map((e) => e.id).toList();
+                    final moved = ids.removeAt(oldIndex);
+                    ids.insert(newIndex, moved);
+                    onReorder(ids);
+                  },
+                  itemBuilder: (context, i) => _ItemCard(
+                    key: ValueKey(list[i].id),
+                    item: list[i],
+                    index: i,
+                    onTap: onEditItem,
+                  ),
+                )
+              : ListView.builder(
+                  padding: const EdgeInsets.symmetric(horizontal: 20),
+                  itemCount: list.length,
+                  itemBuilder: (context, i) => _ItemCard(
+                    key: ValueKey(list[i].id),
+                    item: list[i],
+                    index: i,
+                    onTap: (_) {},
+                  ),
+                ),
+        ),
+        if (isManager && !closed)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 16),
+            child: CupertinoButton(
+              onPressed: onDelete,
+              child: const Text(
+                'Eliminar setlist',
+                style: TextStyle(color: CupertinoColors.systemRed),
+              ),
+            ),
+          ),
+      ],
+    );
+  }
+}
+
+class _ItemCard extends StatelessWidget {
+  const _ItemCard({
+    super.key,
+    required this.item,
+    required this.index,
+    required this.onTap,
+  });
+
+  final SetlistSong item;
+  final int index;
+  final ValueChanged<SetlistSong> onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final key = item.effectiveKey ?? '—';
+    final isOverride = item.overrideKey != null;
+    return Container(
+      margin: const EdgeInsets.only(bottom: 10),
+      decoration: BoxDecoration(
+        color: Theme.of(context).cardColor,
+        borderRadius: BorderRadius.circular(AppTheme.cardRadius),
+      ),
+      child: AppleRow(
+        leading: Text(
+          (index + 1).toString().padLeft(2, '0'),
+          style: const TextStyle(
+            fontSize: 15,
+            fontWeight: FontWeight.w600,
+            color: AppTheme.iosGrey,
+          ),
+        ),
+        title: item.titleSnapshot,
+        subtitle:
+            '${item.singerNameSnapshot ?? 'Sin vocalista'}${isOverride ? ' · tono de hoy' : ''}',
+        trailing: KeyBadge(musicalKey: key),
+        onTap: () => onTap(item),
       ),
     );
   }
